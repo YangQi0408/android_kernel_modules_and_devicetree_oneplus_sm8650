@@ -85,7 +85,7 @@ static int oplus_chg_set_input_current_with_no_aicl(struct battery_chg_dev *bcde
 static bool oplus_vooc_get_fastchg_ing(struct battery_chg_dev *bcdev);
 static bool is_common_topic_available(struct battery_chg_dev *bcdev);
 static bool oplus_get_ufcs_charging(struct battery_chg_dev *bcdev);
-static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev);
+__maybe_unused static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev);
 #endif /*OPLUS_FEATURE_CHG_BASIC*/
 
 #ifdef OPLUS_FEATURE_CHG_BASIC

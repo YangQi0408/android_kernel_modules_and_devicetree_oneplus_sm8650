@@ -12,10 +12,10 @@
 					300 3400 3450 3
 					400 3450 3500 4>;
 		deep_spec,cc_curve = 	<0 3200 3300 0
-					30 3000 3150 1
+					15 3000 3150 1
 					500 3100 3250 2
 					1000 3200 3300 3
-					1500 3300 3370 4>;
+					1500 3200 3300 4>;
 		deep_spec,batt_curve = <500 3500 5
 					10000 3400 2>;
 		deep_spec,cold_uv_offset = <3000 0 0
@@ -758,6 +758,15 @@
 		oplus_spec,vooc_warm_full_voltage = <4130>;
 		oplus_spec,vooc_1time_full_voltage = <4585>;
 		oplus_spec,vooc_ntime_full_voltage = <4575>;
+		oplus_spec,full_voltage = < /* vol_1time vol_ntime */
+					4580 4570 /* 0 ~ 5 */
+					4580 4570 /* 5 ~ 12 */
+					4580 4570 /* 12 ~ 16 */
+					4580 4570 /* 16 ~ 20 */
+					4585 4575 /* 20 ~ 35 */
+					4580 4570 /* 35 ~ 44 */
+					4140 4130 /* 44 ~ 51 */
+					>;
 
 		oplus_spec,vooc_multistep_initial_batt_temp = <1000>;
 		oplus_spec,vooc_little_cool_temp = <160>;
@@ -1023,11 +1032,9 @@
 			};
 
 			strategy_soc_0_to_50_high { /* 36 ~ 55 */
-				strategy_temp_little_cold =	<4150 13 0 0 0
-								4150 10 0 0 0
+				strategy_temp_little_cold =	<4150 10 0 0 0
 								4570  7 1 0 0>;
-				strategy_temp_cool =		<4150 22 0 0 0
-								4150 20 0 0 0
+				strategy_temp_cool =		<4150 20 0 0 0
 								4150 15 0 0 0
 								4510 13 0 0 0
 								4510 10 0 0 0

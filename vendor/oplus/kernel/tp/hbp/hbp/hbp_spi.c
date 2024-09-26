@@ -7,6 +7,20 @@
 
 extern struct task_struct *suspend_task;
 
+#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#else
+#include <linux/platform_data/spi-mt65xx.h>
+
+const struct mtk_chip_config st_spi_ctrdata = {
+	.sample_sel = 0,
+	.cs_setuptime = 5000,
+	.cs_holdtime = 3000,
+	.cs_idletime = 0,
+	.tick_delay = 0,
+};
+#endif
+#endif
 
 static inline int __hbp_spi_alloc_mem(struct spi_transfer **spi_xfer,
 				      size_t xfer_len,
@@ -515,6 +529,12 @@ static int hbp_spi_probe(struct spi_device *spi_dev)
 	spi_platform->dev.parent = &spi_dev->dev;
 	spi_platform->dev.platform_data = bus;
 	spi_platform->id = PLATFORM_DEVID_NONE;
+#ifdef CONFIG_TOUCHPANEL_MTK_PLATFORM
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#else
+	spi_dev->controller_data = (void *)&st_spi_ctrdata;
+#endif
+#endif
 
 	ret = platform_device_add(spi_platform);
 	if (ret < 0) {

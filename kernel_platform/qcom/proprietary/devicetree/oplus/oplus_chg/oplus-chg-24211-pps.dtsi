@@ -44,6 +44,7 @@
 
 		oplus,target_vbus_mv = <11000>;
 		oplus,curr_max_ma = <5000>;
+		oplus,delta_vbus = <0 600>;
 
 		oplus,pps_warm_allow_vol = <4000>;
 		oplus,pps_warm_allow_soc = <50>;
@@ -60,7 +61,7 @@
 		oplus,pps_full_warm_vbat = <4130>;
 		oplus,pps_full_cool_sw_vbat_third = <4470>;
 		oplus,pps_full_normal_sw_vbat_third= <4470>;
-		oplus,pps_full_normal_hw_vbat_third = <4480>;
+		oplus,pps_full_normal_hw_vbat_third = <4510>;
 		oplus,pps_current_change_timeout = <100>;
 		oplus,pps_r_default = <270 45 10 45 20 20 20>;
 		oplus,pps_rmos_mohm = <5>;
@@ -91,7 +92,7 @@
 
 		pps_charge_third_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;
-			oplus,soc_range = <0 20 35 50 75 85 91>;
+			oplus,soc_range = <0 20 35 50 75 85 90>;
 			oplus,temp_range = <0 50 120 200 350 440 530>;
 
 			strategy_soc_range_min {
@@ -233,17 +234,14 @@
 								11000 4350 2000 0 0
 								11000 4460 1500 0 0
 								11000 4470 1000 1 0>;
-				strategy_temp_little_cool =	<11000 4460 5000 0 0
-								11000 4460 4500 0 0
-								11000 4460 4000 0 0
+				strategy_temp_little_cool =	<11000 4460 4000 0 0
 								11000 4460 3500 0 0
 								11000 4460 3000 0 0
 								11000 4460 2500 0 0
 								11000 4460 2000 0 0
 								11000 4460 1500 0 0
 								11000 4470 1000 1 0>;
-				strategy_temp_normal_low =	<11000 4460 5000 0 0
-								11000 4460 4500 0 0
+				strategy_temp_normal_low =	<11000 4460 4500 0 0
 								11000 4460 4000 0 0
 								11000 4460 3500 0 0
 								11000 4460 3000 0 0
@@ -302,7 +300,7 @@
 
 		pps_charge_oplus_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;
-			oplus,soc_range = <0 20 35 50 75 85 91>;
+			oplus,soc_range = <0 20 35 50 75 85 90>;
 			oplus,temp_range = <0 50 120 200 350 440 530>;
 
 			strategy_soc_range_min {
@@ -444,17 +442,14 @@
 								11000 4350 2000 0 0
 								11000 4460 1500 0 0
 								11000 4470 1000 1 0>;
-				strategy_temp_little_cool =	<11000 4460 5000 0 0
-								11000 4460 4500 0 0
-								11000 4460 4000 0 0
+				strategy_temp_little_cool =	<11000 4460 4000 0 0
 								11000 4460 3500 0 0
 								11000 4460 3000 0 0
 								11000 4460 2500 0 0
 								11000 4460 2000 0 0
 								11000 4460 1500 0 0
 								11000 4470 1000 1 0>;
-				strategy_temp_normal_low =	<11000 4460 5000 0 0
-								11000 4460 4500 0 0
+				strategy_temp_normal_low =	<11000 4460 4500 0 0
 								11000 4460 4000 0 0
 								11000 4460 3500 0 0
 								11000 4460 3000 0 0

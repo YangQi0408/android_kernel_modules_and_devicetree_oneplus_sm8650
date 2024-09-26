@@ -15,7 +15,9 @@
 #include "haptic_regmap.h"
 #include "haptic_mid.h"
 #include "sih688x_reg.h"
-
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+#include "../aw8697_haptic/haptic_feedback.h"
+#endif
 int  haptic_regmap_read(struct regmap *regmap, unsigned int start_reg,
 	unsigned int reg_num, char *buf)
 {
@@ -40,14 +42,19 @@ int  haptic_regmap_read(struct regmap *regmap, unsigned int start_reg,
 		return ret;
 	}
 
-	return regmap_raw_read(regmap, start_reg, buf, reg_num);
+	ret = regmap_raw_read(regmap, start_reg, buf, reg_num);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+	if(ret < 0)
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_READ_TRACK_ERR, start_reg, ret);
+#endif
+	return ret;
 }
 
 int haptic_regmap_write(struct regmap *regmap, unsigned int start_reg,
 	unsigned int reg_num, const char *buf)
 {
 	unsigned int val = 0;
-
+	int ret = -1;
 	if (regmap == NULL) {
 		hp_err("%s: NULL == regmap\n", __func__);
 		return -EINVAL;
@@ -64,12 +71,20 @@ int haptic_regmap_write(struct regmap *regmap, unsigned int start_reg,
 	}
 
 	regcache_cache_bypass(regmap, true);
-	return regmap_raw_write(regmap, start_reg, buf, reg_num);
+	ret = regmap_raw_write(regmap, start_reg, buf, reg_num);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+	if(ret < 0)
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_WRITE_TRACK_ERR, start_reg, ret);
+#endif
+	return ret;
 }
 
 int haptic_regmap_bulk_write(struct regmap *regmap, unsigned int start_reg,
 	unsigned int reg_num, const char *buf)
 {
+
+	int ret = -1;
+
 	if (regmap == NULL) {
 		hp_err("%s: NULL == regmap\n", __func__);
 		return -EINVAL;
@@ -81,12 +96,18 @@ int haptic_regmap_bulk_write(struct regmap *regmap, unsigned int start_reg,
 	}
 
 	regcache_cache_bypass(regmap, true);
-	return regmap_bulk_write(regmap, start_reg, buf, reg_num);
+	ret = regmap_bulk_write(regmap, start_reg, buf, reg_num);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+	if(ret < 0)
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_WRITE_TRACK_ERR, start_reg, ret);
+#endif
+	return ret;
 }
 
 int haptic_regmap_bulk_read(struct regmap *regmap, unsigned int start_reg,
 	unsigned int reg_num, char *buf)
 {
+	int ret = -1;
 	if (regmap == NULL) {
 		hp_err("%s: NULL == regmap\n", __func__);
 		return -EINVAL;
@@ -97,16 +118,27 @@ int haptic_regmap_bulk_read(struct regmap *regmap, unsigned int start_reg,
 		return -EINVAL;
 	}
 
-	return regmap_bulk_read(regmap, start_reg, buf, reg_num);
+	ret = regmap_bulk_read(regmap, start_reg, buf, reg_num);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+	if(ret < 0)
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_READ_TRACK_ERR, start_reg, ret);
+#endif
+	return ret;
 }
 
 int haptic_regmap_update_bits(struct regmap *regmap, unsigned int reg,
 	unsigned int mask, unsigned int val)
 {
+	int ret = -1;
 	if (regmap == NULL)
 		hp_err("%s: NULL == regmap\n", __func__);
 
-	return regmap_update_bits(regmap, reg, mask, val);
+	ret = regmap_update_bits(regmap, reg, mask, val);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+	if(ret < 0)
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_WRITE_TRACK_ERR, reg, ret);
+#endif
+	return ret;
 }
 
 struct regmap *haptic_regmap_init(struct i2c_client *client,

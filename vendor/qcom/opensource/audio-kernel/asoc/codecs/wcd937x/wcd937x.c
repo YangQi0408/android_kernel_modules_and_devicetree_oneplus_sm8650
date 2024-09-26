@@ -1834,6 +1834,11 @@ static int wcd937x_event_notify(struct notifier_block *block,
 	case BOLERO_SLV_EVT_SSR_DOWN:
 		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = true;
 		mbhc = &wcd937x->mbhc->wcd_mbhc;
+		#ifdef OPLUS_ARCH_EXTENDS
+		/* Add for fix headset not correct after ssr */
+		mbhc->plug_before_ssr = mbhc->current_plug;
+		pr_info("%s: mbhc->plug_before_ssr=%d\n", __func__, mbhc->plug_before_ssr);
+		#endif /* OPLUS_ARCH_EXTENDS */
 		wcd937x->usbc_hs_status = get_usbc_hs_status(component,
 						mbhc->mbhc_cfg);
 		wcd937x_mbhc_ssr_down(wcd937x->mbhc, component);
@@ -1861,6 +1866,14 @@ static int wcd937x_event_notify(struct notifier_block *block,
 		}
 		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = false;
 		break;
+	#ifdef OPLUS_ARCH_EXTENDS
+	/* Add for update the codec RX clk. CR3723850 */
+	case BOLERO_SLV_EVT_CLK_NOTIFY:
+		snd_soc_component_update_bits(component,
+			WCD937X_DIGITAL_TOP_CLK_CFG, 0x06,
+				((val >> 0x10) << 0x01));
+		break;
+	#endif /* OPLUS_ARCH_EXTENDS */
 	default:
 		dev_err(component->dev, "%s: invalid event %d\n", __func__,
 			event);

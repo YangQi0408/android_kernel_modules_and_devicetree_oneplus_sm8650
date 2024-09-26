@@ -238,6 +238,7 @@ struct sched_assist_locking_ops {
 			bool *preempt, bool *nopreempt, bool *waker_hold_lock);
 	void (*state_systrace_c)(unsigned int cpu, struct task_struct *p);
 	void (*opt_ss_lock_contention)(struct task_struct *p, int old_im, int new_im);
+	void (*locking_tick_hit)(struct task_struct *prev, struct task_struct *next);
 };
 
 extern struct sched_assist_locking_ops *locking_ops;

@@ -157,6 +157,7 @@ struct delayed_work wd0_get_status_work;
 
 extern struct oplus_chg_operations  oplus_chg_bq2589x_ops;
 extern struct oplus_chg_operations  sgm41512_chg_ops;
+extern struct oplus_chg_operations  oplus_chg_sgm41542_ops;
 extern void oplus_usbtemp_recover_func(struct oplus_chg_chip *chip);
 extern int oplus_usbtemp_monitor_common(void *data);
 
@@ -164,6 +165,7 @@ extern int oplus_usbtemp_monitor_common_new_method(void *data);
 
 extern int bq2589x_driver_init(void);
 extern int sgm41512_charger_init(void);
+extern int sgm41542_charger_init(void);
 extern int sc8547_subsys_init(void);
 extern int sc8547_slave_subsys_init(void);
 static void oplus_ccdetect_disable(void);
@@ -2758,7 +2760,7 @@ static ssize_t enable_sc_store(
 	if (buf != NULL && size != 0) {
 		chr_err("[enable smartcharging] buf is %s\n", buf);
 		ret = kstrtoul(buf, 10, &val);
-		if (val < 0) {
+		if (ret < 0) {
 			chr_err(
 				"[enable smartcharging] val is %d ??\n",
 				(int)val);
@@ -8631,6 +8633,112 @@ void oplus_adc_switch_update_work(struct work_struct *work)
 		queue_delayed_work(system_freezable_wq, &adc_switch_update_work, msecs_to_jiffies(800));
 	}
 }
+#define R_CHARGER_1     330
+#define R_CHARGER_2     39
+static struct iio_channel		*chan_vbus;
+int get_vbus_voltage(int *val)
+{
+	int ret = 0;
+
+	if (!IS_ERR_OR_NULL(chan_vbus)) {
+		ret = iio_read_channel_processed(chan_vbus, val);
+		if (ret < 0) {
+			chr_err("[%s]read fail,ret=%d\n", __func__, ret);
+		}
+	} else {
+		chr_err("[%s]chan error chan_vbus_id\n", __func__);
+		ret = -1;
+	}
+
+	*val = (((R_CHARGER_1 +
+			R_CHARGER_2) * 100 * (*val)) /
+			R_CHARGER_2) / 100;
+	chr_info("%s get vbus voltage=%d\n", __func__, *val);
+	return ret;
+}
+
+#define OPLUS_BATTERY_TYPE_LEN 16
+static int oplus_battery_parse_cmdline_match(char *match_str, char *result, int size)
+{
+	struct device_node *cmdline_node = NULL;
+	const char *cmdline;
+	char *match, *match_end;
+	int len, match_str_len, ret;
+
+	if (!result || !match_str)
+		return -EINVAL;
+
+	memset(result, '\0', size);
+	match_str_len = strlen(match_str);
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	if (!cmdline_node) {
+		chr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmdline);
+	if (ret) {
+		chr_err("%s failed to read bootargs\n", __func__);
+		return -EINVAL;
+	}
+
+	match = strstr(cmdline, match_str);
+	if (!match) {
+		chr_err("match: %s fail in cmdline\n", match_str);
+		return -EINVAL;
+	}
+
+	match_end = strstr((match + match_str_len), " ");
+	if (!match_end) {
+		chr_err("match end of : %s fail in cmdline\n", match_str);
+		return -EINVAL;
+	}
+
+	len = match_end - (match + match_str_len);
+	if (len < 0 || len > size) {
+		chr_err("match cmdline :%s fail, len = %d\n", match_str, len);
+		return -EINVAL;
+	}
+
+	memcpy(result, (match + match_str_len), len);
+
+	return 0;
+}
+
+int oplus_gauge_get_battery_type_str(char *type)
+{
+	char *str = "battery_type=";
+	char result[32] = {};
+	int ret;
+
+	ret = oplus_battery_parse_cmdline_match(str, result, sizeof(result));
+	if (ret < 0) {
+		chr_err("match battery type str fail\n");
+		return ret;
+	}
+	snprintf(type, OPLUS_BATTERY_TYPE_LEN, "%s", result);
+
+	return ret;
+}
+
+struct device_node *oplus_get_node_by_type(struct device_node *father_node)
+{
+	char battery_type_str[OPLUS_BATTERY_TYPE_LEN] = { 0 };
+	struct device_node *sub_node = NULL;
+	struct device_node *node = father_node;
+
+	int rc = oplus_gauge_get_battery_type_str(battery_type_str);
+	if (rc == 0) {
+		sub_node = of_get_child_by_name(father_node, battery_type_str);
+		if (sub_node) {
+			node = sub_node;
+		chr_err("current battery type str = %s\n", battery_type_str);
+		}
+	}
+
+	return node;
+}
 
 #define GET_ADC_CHANNEL_RETRY 3
 static int mtk_charger_probe(struct platform_device *pdev)
@@ -8647,6 +8755,7 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	int level = 0;
 	int rc = 0;
 	bool sgm41512_support;
+	bool sgm41542_support;
 #endif
 
 	chr_err("%s: starts\n", __func__);
@@ -8655,6 +8764,9 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	if (!info)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, info);
+
+	pdev->dev.of_node = oplus_get_node_by_type(pdev->dev.of_node);
+
 	info->pdev = pdev;
 
 	mtk_charger_parse_dt(info, &pdev->dev);
@@ -8669,6 +8781,9 @@ static int mtk_charger_probe(struct platform_device *pdev)
 
 	sgm41512_support = of_property_read_bool(pdev->dev.of_node, "qcom,sgm41512_support");
 	chr_err("sgm41512 is supprot = %d\n", sgm41512_support);
+
+	sgm41542_support = of_property_read_bool(pdev->dev.of_node, "qcom,sgm41542_support");
+	chr_err("sgm41542 is supprot = %d\n", sgm41542_support);
 
 	support_usbtemp_protect_v2 = of_property_read_bool(pdev->dev.of_node, "qcom,support_usbtemp_protect_v2");
 	chr_err("support_usbtemp_protect_v2 = %d\n", support_usbtemp_protect_v2);
@@ -8696,6 +8811,9 @@ static int mtk_charger_probe(struct platform_device *pdev)
 		} else if (sgm41512_support) {
 			oplus_chip->chg_ops = &sgm41512_chg_ops;
 			chr_info("success set sgm41512_chg_ops\n");
+		} else if (sgm41542_support) {
+			oplus_chip->chg_ops = &oplus_chg_sgm41542_ops;
+			chr_info("success set sgm41542_chg_ops\n");
 		} else {
 			oplus_chip->chg_ops = &oplus_chg_bq2589x_ops;
 			chr_info("success set oplus_chg_bq2589x_ops\n");
@@ -8728,6 +8846,11 @@ static int mtk_charger_probe(struct platform_device *pdev)
 		chg_err("can't find primary charger!\n");
 	}
 #endif /* OPLUS_FEATURE_CHG_BASIC */
+
+	chan_vbus = devm_iio_channel_get(oplus_chip->dev, "pmic_vbus_voltage");
+	if (IS_ERR(chan_vbus)) {
+		chg_err("%s: pmic_battery_temp auxadc get fail\n", __func__);
+	}
 
 	mutex_init(&info->cable_out_lock);
 	mutex_init(&info->charger_lock);
@@ -8788,6 +8911,8 @@ static int mtk_charger_probe(struct platform_device *pdev)
 		info->chg_psy = devm_power_supply_get_by_phandle(&pdev->dev, "charger");
 	else if (sgm41512_support)
 		info->chg_psy = power_supply_get_by_name("sgm41512");
+	else if (sgm41542_support)
+		info->chg_psy = power_supply_get_by_name("sgm41542");
 	else
 		info->chg_psy = power_supply_get_by_name("bq2589x");
 
@@ -9138,6 +9263,7 @@ static int __init mtk_charger_init(void)
 	pr_err("bq2589x_driver_init\n");
 	bq2589x_driver_init();
 	sgm41512_charger_init();
+	sgm41542_charger_init();
 	sc8547_subsys_init();
 #endif
 #ifdef CONFIG_OPLUS_CHARGER_OPTIGA

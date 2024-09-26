@@ -110,7 +110,7 @@ int ds28e30_compute_verify_ecdsa_no_read(int pg, int anon, u8 *mempage, u8 *chal
 int verify_ecdsa_certificate_device(u8 *sig_r, u8 *sig_s, u8 *pub_key_x, u8 *pub_key_y,
 				   u8 *slave_romid, u8 *slave_manid, u8 *system_level_pub_key_x,
 				   u8 *system_level_pub_key_y);
-int authenticate_ds28e30(unsigned char sn_num[2][12], int page_number);
+int authenticate_ds28e30(unsigned char sn_num[5][12], int batt_info_num, int page_number);
 int ds28e30_write_memory_page_with_ecw(int pg, u8 *new_data);
 
 /* Helper functions */

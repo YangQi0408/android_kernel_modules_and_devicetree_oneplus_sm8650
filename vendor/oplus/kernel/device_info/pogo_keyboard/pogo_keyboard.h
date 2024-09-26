@@ -148,12 +148,20 @@ static bool pogo_debug_en = false;
 #define POWEROFF_TIMER_EXPIRY       50
 
 #define POWEROFF_DISCONNECT_MAX     20
-#define POWEROFF_CONNECT_MAX        4
+#define POWEROFF_CONNECT_MAX        12
 #define POWEROFF_TIMER_CHECK_MAX    20
 
 #define PLUGIN_CHECK_CHECK_MAX      6
 
 #define SYNC_LCD_STATE_CNT_MAX      50
+
+#define KEVENT_LOG_TAG              "psw_bsp_pogopin"
+#define KEVENT_EVENT_ID             "pogopin_sn_report"
+#define DEFAULT_SN_LEN              20
+#define POGOPIN_TRIGGER_MSG_LEN     2048
+#define MAX_POGOPIN_EVENT_TAG_LEN   32
+#define MAX_POGOPIN_EVENT_ID_LEN    20
+#define MAX_POGOPIN_PAYLOAD_LEN     1024
 
 enum {
     KEYBOARD_PLUG_IN_EVENT = 0x01,
@@ -175,6 +183,8 @@ enum {
     KEYBOARD_POWER_OFF_EVENT, // turn off vcc for keyboard
     KEYBOARD_HOST_CHECK_EVENT,
     KEYBOARD_TEST_EVENT,
+    KEYBOARD_REPORT_SN_EVENT,
+    KEYBOARD_REPORT_TOUCH_STATUS_EVENT,
 };
 
 enum {
@@ -318,7 +328,13 @@ struct pogo_keyboard_data {
     unsigned char keyboard_brand;
 
     unsigned int sync_lcd_state_cnt;
-    bool sync_lcd_state_write;
+
+    bool plug_timer_one_time;
+    u8 report_sn[DEFAULT_SN_LEN];
+    bool pogo_report_touch_status;
+
+    bool pogo_battery_support;
+    u8 pogo_battery_power_level;
 };
 
 

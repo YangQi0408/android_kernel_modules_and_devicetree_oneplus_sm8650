@@ -85,6 +85,7 @@ enum panel_id{
 	ILI9883C,
 	FT8057P,
 	P_7,
+	ILI7807S,
 	PANEL_NUM
 };
 

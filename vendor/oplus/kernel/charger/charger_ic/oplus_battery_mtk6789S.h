@@ -33,6 +33,7 @@
 #define BQ2589X 2
 #define BQ2591X 3
 #define SGM41512 4
+#define SGM41542 5
 
 #define CHARGING_INTERVAL 10
 #define CHARGING_FULL_INTERVAL 20

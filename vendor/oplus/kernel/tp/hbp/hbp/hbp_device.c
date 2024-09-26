@@ -593,7 +593,9 @@ static irqreturn_t hbp_irq_threaded_fn(int irq, void *dev_id)
 	if (ret < 0) {
 		hbp_err("failed to get irq type\n");
 	} else {
-		if (reason == IRQ_REASON_RESET_WDT) {
+		if (reason == IRQ_REASON_RESET_WDT
+				|| reason == IRQ_REASON_RESET_PWR
+				|| reason == IRQ_REASON_RESET_FWUPDATE) {
 			goto report_frame;
 		}
 	}

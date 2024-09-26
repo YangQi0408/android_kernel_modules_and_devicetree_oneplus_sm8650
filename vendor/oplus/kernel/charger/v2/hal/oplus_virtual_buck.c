@@ -3049,7 +3049,7 @@ static int oplus_chg_vb_get_otg_online_status(struct oplus_chg_ic_dev *ic_dev, i
 	if (support_hw_detect) {
 		online = online | (typec_otg ? OTG_DEV_CONNECT : DISCONNECT);
 	} else {
-		online = online | (typec_otg ? OTG_DEV_CONNECT : DISCONNECT);
+		online = online | (typec_otg ? STANDARD_TYPEC_DEV_CONNECT : DISCONNECT);
 	}
 	*status = online;
 

@@ -269,29 +269,38 @@ static ssize_t proc_osi_amu_read(struct file *file, char __user *buf,
 static ssize_t proc_osi_amu_uid_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	char *buffer;
 	size_t len = 0;
 	struct amu_uid_entry *amu_uid_entry = NULL;
 	struct uid_struct *uid_struct;
 	int bkt, i = 0;
 	uid_t uid;
 	ssize_t ret;
-	u64 uid_cnt =  atomic64_read(&nums_uid);
-	int alloc_bytes = uid_cnt * UID_PRINT_PER_LINE + UID_PRINT_HEADER;
+	char *buffer;
+	u64 uid_cnt;
+	int alloc_bytes;
 
-	buffer = kzalloc(alloc_bytes, GFP_KERNEL);
-	if (!buffer)
+	spin_lock(&amu_uid_lock);
+	uid_cnt = atomic64_read(&nums_uid);
+	alloc_bytes = uid_cnt * UID_PRINT_PER_LINE + UID_PRINT_HEADER;
+
+	buffer = kzalloc(alloc_bytes, GFP_ATOMIC);
+	if (!buffer) {
+		spin_unlock(&amu_uid_lock);
 		return -ENOMEM;
+	}
 	pr_info("proc_osi_amu_uid_read, count:%llu", uid_cnt);
 	len += snprintf(buffer + len, alloc_bytes - len, "%10s,%15s,%15s,%15s\n",
 		"uid", "comm", "inst", "cycle");
-	spin_lock(&amu_uid_lock);
+
 	hash_for_each(amu_uid_table, bkt, amu_uid_entry, node) {
 		if (amu_uid_entry && amu_uid_entry->uid_struct) {
 			uid_struct = amu_uid_entry->uid_struct;
 			uid = uid_struct->uid;
-			if (++i > uid_cnt)
+			if (++i > uid_cnt) {
+				spin_unlock(&amu_uid_lock);
+				kfree(buffer);
 				return -EFAULT;
+			}
 			len += snprintf(buffer + len, alloc_bytes - len, "%10d,%s,%llu,%llu\n",
 				uid_struct->uid, uid_struct->leader_comm,
 				uid_struct->uid_total_inst, uid_struct->uid_total_cycle);

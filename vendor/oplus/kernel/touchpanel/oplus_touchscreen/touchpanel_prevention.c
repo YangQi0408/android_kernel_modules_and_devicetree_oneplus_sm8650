@@ -7,6 +7,7 @@
 #include "touchpanel_healthinfo.h"
 #include <touchpanel_prevention.h>
 #include <linux/uaccess.h>
+#include <linux/string.h>
 
 /*******Start of LOG TAG Declear**********************************/
 #define TPD_DEVICE "prevent"
@@ -4169,28 +4170,68 @@ static int kernel_grip_parse(struct kernel_grip_info *grip_info, char *input, in
     return 0;
 }
 
-static ssize_t kernel_grip_write(struct file *file, const char __user *buffer, size_t count, loff_t *ppos)
+static void transfer_grip_cmdList_to_single(struct kernel_grip_info *grip_info, char *info, int w_size)
 {
-    char buf[PAGESIZE] = {0};
-    struct kernel_grip_info *grip_info = PDE_DATA(file_inode(file));
+	char *token = NULL;
+	char single_cmd[GRIP_SINGLE_CMD_SIZE] = {0};
+	char *temp = NULL;
 
-    if (!grip_info)
-        return count;
+	if (info == NULL) {
+		TPD_INFO("info is null\n");
+		return;
+	}
 
-    if (count > PAGESIZE) {
-        TPD_INFO("%s: count is too large :%d.\n",  __func__, (int)count);
-        return count;
-    }
-    if (copy_from_user(buf, buffer, count)) {
-        TPD_INFO("%s: read proc input error.\n", __func__);
-        return count;
-    }
+	temp = info;
+	while ((token = strsep(&temp, ";")) != NULL) {
+		if ((strlen(token) + 1) <= GRIP_SINGLE_CMD_SIZE) {
+			memcpy(single_cmd, token, strlen(token));
+			single_cmd[strlen(token)] = '\0';
+			kernel_grip_parse(grip_info, single_cmd, strlen(single_cmd) + 1);
+		} else {
+			TPD_INFO("token:%s size is beyond\n", token);
+		}
+	}
 
-    mutex_lock(&grip_info->grip_mutex);
-    kernel_grip_parse(grip_info, buf, count);
-    mutex_unlock(&grip_info->grip_mutex);
+	return;
+}
 
-    return count;
+static ssize_t kernel_grip_write(struct file *file, const char __user *buffer,
+				 size_t count, loff_t *ppos)
+{
+	char *buf = NULL;
+	struct kernel_grip_info *grip_info = PDE_DATA(file_inode(file));
+
+	if (!grip_info) {
+		return count;
+	}
+
+	if (count > GRIP_ALL_CMD_SIZE) {
+		TPD_INFO("%s: count is too large :%d.\n",  __func__, (int)count);
+		return count;
+	}
+
+	buf = kzalloc(GRIP_ALL_CMD_SIZE, GFP_KERNEL);
+
+	if (!buf) {
+		TPD_INFO("%s kmalloc failed.\n", __func__);
+		return count;
+	}
+
+	if (copy_from_user(buf, buffer, count)) {
+		TPD_INFO("%s: read proc input error.\n", __func__);
+		if (buf) {
+			kfree(buf);
+		}
+		return count;
+	}
+
+	mutex_lock(&grip_info->grip_mutex);
+	transfer_grip_cmdList_to_single(grip_info, buf, sizeof(buf));
+	mutex_unlock(&grip_info->grip_mutex);
+	if (buf) {
+		kfree(buf);
+	}
+	return count;
 }
 
 static int kernel_grip_open(struct inode *inode, struct file *file)
