@@ -3118,6 +3118,20 @@ static int ilitek_sensitive_lv_set(void *chip_data, int level)
 	return ret;
 }
 
+static int ilitek_diaphragm_touch_lv_set(void *chip_data, int level)
+{
+	struct ilitek_ts_data *chip_info = (struct ilitek_ts_data *)chip_data;
+	int ret = 0;
+	uint8_t temp[3] = {0x01, 0x31, 0x00};
+
+	mutex_lock(&chip_info->touch_mutex);
+	temp[2] = level;
+	ILI_INFO("write 0x01, 0x31, 0x00, 0x%X(level)\n", level);
+	ret = ilits->wrapper(temp, 3, NULL, 0, OFF, OFF);
+	mutex_unlock(&chip_info->touch_mutex);
+	return ret;
+}
+
 static void ilitek_rate_white_list_ctrl(void *chip_data, int value)
 {
 	struct ilitek_ts_data* chip_info = (struct ilitek_ts_data*)chip_data;
@@ -3215,6 +3229,7 @@ static struct oplus_touchpanel_operations ilitek_ops = {
 	.tp_queue_work_prepare      = ilitek_reset_queue_work_prepare,
 	.tp_irq_throw_away          = ilitek_irq_throw_away,
 	.rate_white_list_ctrl   	= ilitek_rate_white_list_ctrl,
+	.diaphragm_touch_lv_set     = ilitek_diaphragm_touch_lv_set,
 };
 
 static int ilitek_read_debug_data(struct seq_file *s,

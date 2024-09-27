@@ -268,6 +268,7 @@ static struct work_struct mWork;
 static volatile unsigned char mUeventInit = 0;
 char *mUevent[MAX_ENVP_SIZE] = {0};
 int mCount = 0;
+int mInitCount = 0;
 qdf_atomic_t is_mem_malloc;
 
 void hostapd_driver_send_uevent(struct hdd_adapter *sta_adapter, uint32_t reasoncode,
@@ -339,6 +340,10 @@ static void hostapdWorkHandler(struct work_struct *data)
 
 void hostapdConnUeventInit(void)
 {
+	if (mUeventInit == INIT_FINISHED) {
+		hdd_debug("softap sta connect: mInitCount = %d, uevent already init.", mInitCount++);
+		return;
+	}
 	INIT_WORK(&mWork, hostapdWorkHandler);
 	mUeventInit = INIT_FINISHED;
 	qdf_atomic_init(&is_mem_malloc);
@@ -348,8 +353,11 @@ void hostapdConnUeventInit(void)
 void hostapdConnUeventDeinit(void)
 {
 	int i;
-	if (mUeventInit == INIT_FINISHED) {
+	if (mUeventInit == INIT_FINISHED && mInitCount == 0) {
 		cancel_work_sync(&mWork);
+	} else {
+		hdd_debug("softap sta connect: mInitCount = %d, uevent is be used, not deinit", mInitCount--);
+		return;
 	}
 
 	mUeventInit = 0;

@@ -24,7 +24,7 @@
 #include <oplus_chg_wls.h>
 #include <oplus_smart_chg.h>
 
-#define QUICK_MODE_POWER_THR_W	100
+#define QUICK_MODE_POWER_THR_W	80
 
 struct oplus_smart_charge {
 	struct device *dev;

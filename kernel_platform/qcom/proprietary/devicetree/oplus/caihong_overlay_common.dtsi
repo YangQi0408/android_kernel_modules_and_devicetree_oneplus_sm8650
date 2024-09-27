@@ -121,3 +121,16 @@
 	};
 
 };
+
+&modem_pas {
+    status = "disabled";
+};
+&mpss_dsm_mem {
+    status = "disabled";
+};
+&mpss_dsm_mem_2{
+    status = "disabled";
+};
+&mpss_mem{
+    status = "disabled";
+};

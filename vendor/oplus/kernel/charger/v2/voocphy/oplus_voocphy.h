@@ -92,15 +92,14 @@ enum {
 };
 
 enum {
-	VOOCPHY_BATT_TEMP_HIGH,
-	VOOCPHY_BATT_TEMP_WARM,
-	VOOCPHY_BATT_TEMP_NORMAL,
-	VOOCPHY_BATT_TEMP_LITTLE_COOL,
-	VOOCPHY_BATT_TEMP_LITTLE_COOL_HIGH,
-	VOOCPHY_BATT_TEMP_COOL,
-	VOOCPHY_BATT_TEMP_LITTLE_COLD,
-	VOOCPHY_BATT_TEMP_COLD,
-	VOOCPHY_BATT_TEMP_REMOVE,
+	VOOCPHY_BATT_TEMP_LITTLE_COLD,		/* 0 ~ 5 */
+	VOOCPHY_BATT_TEMP_COOL,			/* 5 ~ 12 */
+	VOOCPHY_BATT_TEMP_LITTLE_COOL,		/* 12 ~ 16 */
+	VOOCPHY_BATT_TEMP_LITTLE_COOL_HIGH,	/* 16 ~ 20 */
+	VOOCPHY_BATT_TEMP_NORMAL,		/* 20 ~ 35 */
+	VOOCPHY_BATT_TEMP_NORMAL_HIGH,		/* 35 ~ 44 */
+	VOOCPHY_BATT_TEMP_WARM,			/* 44 ~ 51 */
+	VOOCPHY_BATT_TEMP_MAX,
 };
 
 enum {
@@ -298,6 +297,11 @@ static struct irqinfo bidirect_int_flag[BIDIRECT_IRQ_EVNET_NUM] = {
 struct low_curr_full_condition{
 	u32 curr;
 	u32 vbatt;
+};
+
+struct full_voltage_condition {
+	unsigned int vol_1time;
+	unsigned int vol_ntime;
 };
 
 /* 7.adjust current according to battery voltage */
@@ -874,6 +878,7 @@ struct oplus_voocphy_manager {
 	unsigned int vooc_warm_full_voltage;
 	unsigned int vooc_1time_full_voltage;
 	unsigned int vooc_ntime_full_voltage;
+	struct full_voltage_condition full_voltage[VOOCPHY_BATT_TEMP_MAX];
 	int ovp_reg;
 	int ocp_reg;
 	int reg_ctrl_1;

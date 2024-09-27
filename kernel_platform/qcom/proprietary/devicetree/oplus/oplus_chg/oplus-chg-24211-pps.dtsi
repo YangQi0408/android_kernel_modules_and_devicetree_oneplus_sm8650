@@ -44,6 +44,7 @@
 
 		oplus,target_vbus_mv = <11000>;
 		oplus,curr_max_ma = <5000>;
+		oplus,delta_vbus = <0 600>;
 
 		oplus,pps_warm_allow_vol = <4000>;
 		oplus,pps_warm_allow_soc = <50>;
@@ -60,7 +61,7 @@
 		oplus,pps_full_warm_vbat = <4130>;
 		oplus,pps_full_cool_sw_vbat_third = <4470>;
 		oplus,pps_full_normal_sw_vbat_third= <4470>;
-		oplus,pps_full_normal_hw_vbat_third = <4480>;
+		oplus,pps_full_normal_hw_vbat_third = <4510>;
 		oplus,pps_current_change_timeout = <100>;
 		oplus,pps_r_default = <270 45 10 45 20 20 20>;
 		oplus,pps_rmos_mohm = <5>;

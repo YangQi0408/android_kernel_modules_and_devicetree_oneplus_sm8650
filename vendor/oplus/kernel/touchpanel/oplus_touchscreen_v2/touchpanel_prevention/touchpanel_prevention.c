@@ -7,6 +7,7 @@
 #include <linux/input.h>
 #include <linux/delay.h>
 #include <linux/version.h>
+#include <linux/string.h>
 
 #include "../touchpanel_common.h"
 #include "touchpanel_prevention.h"
@@ -4334,30 +4335,67 @@ static int kernel_grip_parse(struct kernel_grip_info *grip_info, char *input,
 	return 0;
 }
 
+static void transfer_grip_cmdList_to_single(struct kernel_grip_info *grip_info, char *info, int w_size)
+{
+	char *token = NULL;
+	char single_cmd[GRIP_SINGLE_CMD_SIZE] = {0};
+	char *temp = NULL;
+
+	if (info == NULL) {
+		TPD_INFO("info is null\n");
+		return;
+	}
+
+	temp = info;
+	while ((token = strsep(&temp, ";")) != NULL) {
+		if ((strlen(token) + 1) <= GRIP_SINGLE_CMD_SIZE) {
+			memcpy(single_cmd, token, strlen(token));
+			single_cmd[strlen(token)] = '\0';
+			kernel_grip_parse(grip_info, single_cmd, strlen(single_cmd) + 1);
+		} else {
+			TPD_INFO("token:%s size is beyond\n", token);
+		}
+	}
+
+	return;
+}
+
 static ssize_t kernel_grip_write(struct file *file, const char __user *buffer,
 				 size_t count, loff_t *ppos)
 {
-	char buf[PAGESIZE] = {0};
+	char *buf = NULL;
 	struct kernel_grip_info *grip_info = PDE_DATA(file_inode(file));
 
 	if (!grip_info) {
 		return count;
 	}
 
-	if (count > PAGESIZE) {
+	if (count > GRIP_ALL_CMD_SIZE) {
 		GRIP_TP_INFO("%s: count is too large :%d.\n",  __func__, (int)count);
+		return count;
+	}
+
+	buf = kzalloc(GRIP_ALL_CMD_SIZE, GFP_KERNEL);
+
+	if (!buf) {
+		GRIP_TP_INFO("%s kmalloc failed.\n", __func__);
 		return count;
 	}
 
 	if (copy_from_user(buf, buffer, count)) {
 		GRIP_TP_INFO("%s: read proc input error.\n", __func__);
+		if (buf) {
+			kfree(buf);
+		}
 		return count;
 	}
 
 	mutex_lock(&grip_info->grip_mutex);
-	kernel_grip_parse(grip_info, buf, count);
+	transfer_grip_cmdList_to_single(grip_info, buf, sizeof(buf));
 	mutex_unlock(&grip_info->grip_mutex);
-
+	if (buf) {
+		kfree(buf);
+	}
 	return count;
 }
 

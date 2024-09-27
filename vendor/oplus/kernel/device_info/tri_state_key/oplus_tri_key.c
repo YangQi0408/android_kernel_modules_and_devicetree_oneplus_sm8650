@@ -130,6 +130,15 @@ int oplus_hall_enable_irq(unsigned int id, bool enable)
 			return g_the_chip->dhall_up_ops->enable_irq(enable);
 		}
 		break;
+	case DHALL_2:
+		if (!g_the_chip->threeaxis_dhall_ops ||
+			!g_the_chip->threeaxis_dhall_ops->enable_irq)
+			TRI_KEY_ERR("enable hall2 irq error\n");
+		else {
+			oplus_hall_clear_irq(DHALL_2);
+			return g_the_chip->threeaxis_dhall_ops->enable_irq(enable);
+		}
+		break;
 	default:
 		TRI_KEY_ERR("id : %d is not correct\n", id);
 		return -EINVAL;
@@ -443,6 +452,8 @@ static void threeaxis_reboot_get_position(struct extcon_dev_data *chip)
 		chip->position = MID_STATE;
 
 	last_position = chip->position;
+	TRI_KEY_LOG("threeaxis_reboot_get_position->hall_y:%d,xdata:%d,default_up_xdata:%d,position:%d\n",
+		chip->hall_value.hall_y, xdata, chip->default_up_xdata, chip->position);
 }
 
 static void reboot_get_position(struct extcon_dev_data *chip)
@@ -1324,7 +1335,7 @@ static int threeaxis_judge_calibration_data(struct extcon_dev_data *chip)
 {
 	int res = 0;
 	if (chip->threeaxis_calib_data[1] == 0 || chip->threeaxis_calib_data[4] == 0 ||
-	chip->threeaxis_calib_data[7] == 0) {
+	        chip->threeaxis_calib_data[7] == 0) {
 		res = threeaxis_get_data(chip);
 		threeaxis_reboot_get_position(chip);
 		if (chip->position == UP_STATE) {
@@ -1338,14 +1349,14 @@ static int threeaxis_judge_calibration_data(struct extcon_dev_data *chip)
 			chip->threeaxis_calib_data[3] = chip->hall_value.hall_x;
 			chip->threeaxis_calib_data[4] = chip->hall_value.hall_y;
 			chip->threeaxis_calib_data[5] = chip->hall_value.hall_z;
-			TRI_KEY_LOG("%s: UP_STATE calib_data =[%d %d %d]\n", __func__, chip->threeaxis_calib_data[3], \
+			TRI_KEY_LOG("%s: MID_STATE calib_data =[%d %d %d]\n", __func__, chip->threeaxis_calib_data[3], \
 			chip->threeaxis_calib_data[4], chip->threeaxis_calib_data[5]);
 		}
 		if (chip->position == DOWN_STATE) {
 			chip->threeaxis_calib_data[6] = chip->hall_value.hall_x;
 			chip->threeaxis_calib_data[7] = chip->hall_value.hall_y;
 			chip->threeaxis_calib_data[8] = chip->hall_value.hall_z;
-			TRI_KEY_LOG("%s: UP_STATE calib_data =[%d %d %d]\n", __func__, chip->threeaxis_calib_data[6], \
+			TRI_KEY_LOG("%s: DOWN_STATE calib_data =[%d %d %d]\n", __func__, chip->threeaxis_calib_data[6], \
 			chip->threeaxis_calib_data[7], chip->threeaxis_calib_data[8]);
 		}
 		report_key_value(chip);
@@ -2345,8 +2356,9 @@ static ssize_t proc_hall_enable_irq_write(struct file *file, const char __user *
 	}
 
 	if (!kstrtoint(buf, 0, &tmp)) {
-		oplus_hall_enable_irq(0, tmp);
-		oplus_hall_enable_irq(1, tmp);
+		oplus_hall_enable_irq(DHALL_0, tmp);
+		oplus_hall_enable_irq(DHALL_1, tmp);
+		oplus_hall_enable_irq(DHALL_2, tmp);
 	} else
 		TRI_KEY_DEBUG("invalid content: '%s', length = %zd\n",
 		buf, count);

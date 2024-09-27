@@ -100,10 +100,10 @@ static char sih_high_temp_high_humidity_1419[11][60] = {
 
 static struct f0_map f0_suffix_map[] = {
 	{1600, NULL},
-	{1630, "_162Hz.bin"},
-	{1670, "_166Hz.bin"},
-	{1710, ".bin"},
-	{1750, "_174Hz.bin"},
+	{1640, "_162Hz.bin"},
+	{1680, "_166Hz.bin"},
+	{1720, ".bin"},
+	{1760, "_174Hz.bin"},
 	{1800, "_178Hz.bin"},
 	{1980, "_197Hz.bin"},
 	{2020, "_201Hz.bin"},

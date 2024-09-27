@@ -34,6 +34,7 @@ static unsigned int async_insert_queue = 1;
 static unsigned int sync_insert_queue = 1;
 static unsigned int async_ux_test = 0;
 static unsigned int allow_accumulate_ux = 1;
+int unset_async_ux_inrestore = 1;
 
 static int insert_limit[NUM_INSERT_MAX] = {0};
 
@@ -105,10 +106,10 @@ static inline void free_oplus_binder_struct(struct oplus_binder_struct *obs)
 {
 	if ((unsigned long long)obs == OBS_NOT_ASYNC_UX_VALUE) {
 		obs = NULL;
-		return;
 	} else if (!oplus_binder_struct_cachep || IS_ERR_OR_NULL(obs)) {
 		return;
 	} else {
+		memset(obs, 0, sizeof(struct oplus_binder_struct));
 		kmem_cache_free(oplus_binder_struct_cachep, obs);
 	}
 }
@@ -402,6 +403,7 @@ static void binder_ux_state_systrace(struct task_struct *from, struct task_struc
 			snprintf(buf, sizeof(buf), "C|9999|z_binder_t_vendordata|%lld\n", t_vendordata);
 			tracing_mark_write(buf);
 		}
+
 		snprintf(buf, sizeof(buf), "C|9999|z_binder_from|%d\n", from_pid);
 		tracing_mark_write(buf);
 		memset(buf, 0, sizeof(buf));
@@ -591,7 +593,7 @@ static inline void binder_set_inherit_ux(struct task_struct *thread_task,
 }
 
 static inline void binder_unset_inherit_ux(struct task_struct *thread_task,
-	bool sync, struct binder_transaction *t, struct binder_proc *proc)
+	int unset_type, struct binder_transaction *t, struct binder_proc *proc)
 {
 	struct oplus_task_struct *ots = get_oplus_task_struct(thread_task);
 	bool is_servicemg = false;
@@ -600,25 +602,25 @@ static inline void binder_unset_inherit_ux(struct task_struct *thread_task,
 		if (!IS_ERR_OR_NULL(ots)) {
 			trace_binder_inherit_ux(NULL, thread_task, ots->ux_depth, ots->ux_state,
 				INVALID_VALUE, ots->binder_async_ux_sts,
-				sync, "unset_ux before unset");
+				unset_type, "unset_ux before unset");
 		}
 
-		if (sync_use_t_vendordata && sync) {
+		if (sync_use_t_vendordata && (unset_type == SYNC_UNSET)) {
 			is_servicemg = is_task_servicemg(thread_task);
-			if (!is_sync_t_ux_state(t, sync, is_servicemg)) {
+			if (!is_sync_t_ux_state(t, unset_type, is_servicemg)) {
 				binder_ux_state_systrace(current, thread_task, STATE_SYNC_T_NOT_UNSET_UX, LOG_BINDER_SYSTRACE_LVL0, t, proc);
 				return;
 			}
-			set_sync_t_ux_state(t, false, sync, is_servicemg);
+			set_sync_t_ux_state(t, false, true, is_servicemg);
 		}
 		unset_inherit_ux(thread_task, INHERIT_UX_BINDER);
 		if (!IS_ERR_OR_NULL(ots)) {
-			if (!sync) {
+			if (unset_type == SYNC_OR_ASYNC_UNSET) {
 				set_task_async_ux_sts(ots, false);
 			}
 			trace_binder_inherit_ux(NULL, thread_task, ots->ux_depth, ots->ux_state,
-				INVALID_VALUE, ots->binder_async_ux_sts, sync, "unset_ux after unset");
-			if (!sync) {
+				INVALID_VALUE, ots->binder_async_ux_sts, unset_type, "unset_ux after unset");
+			if (unset_type == SYNC_OR_ASYNC_UNSET) {
 				oplus_binder_debug(LOG_SET_ASYNC_UX, "async_unset_ux after unset, thread(pid = %d tgid = %d comm = %s) \
 					 ots_enable = %d ux_sts = %d ux_state = %d ux_depth = %d inherit_ux = %lld\n",
 					thread_task->pid, thread_task->tgid, thread_task->comm, ots->binder_async_ux_enable,
@@ -630,13 +632,13 @@ static inline void binder_unset_inherit_ux(struct task_struct *thread_task,
 					ots->ux_state, ots->ux_depth, atomic64_read(&ots->inherit_ux));
 			}
 		}
-		if (sync)
+		if (unset_type == SYNC_UNSET)
 			binder_ux_state_systrace(current, thread_task, STATE_SYNC_UNSET_UX, LOG_BINDER_SYSTRACE_LVL0, t, proc);
 		else
-			binder_ux_state_systrace(current, thread_task, STATE_ASYNC_UNSET_UX, LOG_BINDER_SYSTRACE_LVL0, t, proc);
+			binder_ux_state_systrace(current, thread_task, STATE_SYNC_OR_ASYNC_UNSET_UX, LOG_BINDER_SYSTRACE_LVL0, t, proc);
 	} else {
 		trace_binder_inherit_ux(NULL, thread_task, INVALID_VALUE, INVALID_VALUE,
-			INVALID_VALUE, INVALID_VALUE, sync, "unset_ux do nothing");
+			INVALID_VALUE, INVALID_VALUE, unset_type, "unset_ux do nothing");
 	}
 }
 
@@ -647,7 +649,7 @@ static inline void binder_set_inherit_ux(struct task_struct *thread_task, struct
 }
 
 static inline void binder_unset_inherit_ux(struct task_struct *thread_task,
-	bool sync, struct binder_transaction *t, struct binder_proc *proc)
+	int unset_type, struct binder_transaction *t, struct binder_proc *proc)
 {
 }
 #endif
@@ -672,7 +674,7 @@ void android_vh_binder_restore_priority_handler(void *unused,
 	}
 #endif
 
-	if (t != NULL) {
+	if (t) {
 		if(!is_task_servicemg(task)) {
 			if(t->to_proc) {
 				binder_inner_proc_lock(t->to_proc);
@@ -683,7 +685,7 @@ void android_vh_binder_restore_priority_handler(void *unused,
 		if(!wait) {
 			trace_binder_ux_task(1, INVALID_VALUE, INVALID_VALUE, task,
 				INVALID_VALUE, t, NULL, "sync_ux unset binder_reply");
-			binder_unset_inherit_ux(task, true, t, NULL);
+			binder_unset_inherit_ux(task, SYNC_UNSET, t, NULL);
 		} else {
 			trace_binder_ux_task(1, INVALID_VALUE, INVALID_VALUE, task,
 				INVALID_VALUE, t, NULL, "busy, sync_ux unset fail");
@@ -691,7 +693,7 @@ void android_vh_binder_restore_priority_handler(void *unused,
 	} else {
 		trace_binder_ux_task(1, INVALID_VALUE, INVALID_VALUE, task,
 			INVALID_VALUE, t, NULL, "sync_ux unset waitfor work");
-		binder_unset_inherit_ux(task, true, t, NULL);
+		binder_unset_inherit_ux(task, SYNC_OR_ASYNC_UNSET, t, NULL);
 	}
 }
 
@@ -704,7 +706,7 @@ void android_vh_binder_wait_for_work_handler(void *unused,
 	if (do_proc_work) {
 		trace_binder_ux_task(1, INVALID_VALUE, INVALID_VALUE, tsk->task, INVALID_VALUE,
 			NULL, NULL, "sync_ux unset wait_for_work");
-		binder_unset_inherit_ux(tsk->task, true, NULL, proc);
+		binder_unset_inherit_ux(tsk->task, SYNC_OR_ASYNC_UNSET, NULL, proc);
 	}
 }
 
@@ -779,6 +781,18 @@ static int async_ux_test_debug(void)
 	return ret;
 }
 
+static bool is_allow_sf_binder_ux(struct task_struct *task)
+{
+	struct oplus_task_struct *ots = NULL;
+
+	ots = get_oplus_task_struct(task);
+	if (!IS_ERR_OR_NULL(ots) && ots->im_flag == IM_FLAG_SURFACEFLINGER) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
 static void android_vh_alloc_oem_binder_struct_handler(void *unused,
 	struct binder_transaction_data *tr, struct binder_transaction *t, struct binder_proc *target_proc)
 {
@@ -819,7 +833,13 @@ static void android_vh_alloc_oem_binder_struct_handler(void *unused,
 		return;
 	}
 
-	async_ux_enable = ots->binder_async_ux_enable;
+	if (ots->binder_async_ux_enable) {
+		async_ux_enable = ots->binder_async_ux_enable;
+	} else if (is_allow_sf_binder_ux(current)) {
+		async_ux_enable = 1;
+		binder_ux_state_systrace(current, NULL,
+			STATE_SF_ASYNC_IS_UX, LOG_BINDER_SYSTRACE_LVL0, t, NULL);
+	}
 	test_debug = async_ux_test_debug();
 	if (async_ux_enable || test_debug) {
 		obs = get_oplus_binder_struct(t, true);
@@ -848,7 +868,8 @@ static void async_mode_unset_ux(struct binder_transaction *t,
 	struct oplus_task_struct *ots = NULL;
 	struct task_struct *task = NULL;
 
-	if (unlikely(!g_sched_enable) || unlikely(!g_async_ux_enable)) {
+	if (unlikely(!g_sched_enable) || unlikely(!g_async_ux_enable)
+		|| likely(unset_async_ux_inrestore)) {
 		return;
 	}
 
@@ -871,7 +892,7 @@ static void async_mode_unset_ux(struct binder_transaction *t,
 	}
 
 	if (finished) {	/* t has been freed */
-		binder_unset_inherit_ux(task, false, t, proc);
+		binder_unset_inherit_ux(task, SYNC_OR_ASYNC_UNSET, t, proc);
 		trace_binder_ux_task(false, INVALID_VALUE, INVALID_VALUE, task,
 			INVALID_VALUE, t, NULL, "async_ux unset [finished]");
 		return;
@@ -889,7 +910,7 @@ static void async_mode_unset_ux(struct binder_transaction *t,
 		return;
 	}
 	obs->async_ux_enable = ASYNC_UX_DISABLE;
-	binder_unset_inherit_ux(task, false, t, proc);
+	binder_unset_inherit_ux(task, SYNC_OR_ASYNC_UNSET, t, proc);
 	trace_binder_ux_task(false, INVALID_VALUE, INVALID_VALUE, task,
 		obs->async_ux_enable, t, obs, "async_ux unset not-finished");
 }
@@ -950,48 +971,6 @@ static void set_thread_node_when_br_received(struct binder_transaction *t, struc
 	set_binder_thread_node(t, task, NULL, false, false);
 }
 
-static void set_async_ux_after_pending(struct binder_transaction *t, struct binder_thread *thread)
-{
-	struct oplus_binder_struct *obs = NULL;
-	struct oplus_task_struct *ots = NULL;
-	struct task_struct *task = NULL;
-	int ux_enable = 0;
-	if (!g_set_async_ux_after_pending) {
-		return;
-	}
-	if (IS_ERR_OR_NULL(t) || IS_ERR_OR_NULL(thread) || IS_ERR_OR_NULL(thread->task)) {
-		return;
-	}
-	obs = get_oplus_binder_struct(t, false);
-	if (is_obs_valid(obs) != OBS_VALID) {
-		trace_binder_set_async_afterpending(t, NULL, NULL, obs, INVALID_VALUE, "obs invalid");
-		return;
-	}
-	ux_enable = obs->async_ux_enable;
-
-	if (!obs->pending_async) {
-		trace_binder_set_async_afterpending(t, task, NULL, obs, ux_enable, "not pending_async");
-		return;
-	}
-
-	task = thread->task;
-	ots = get_oplus_task_struct(task);
-	if (IS_ERR_OR_NULL(ots)) {
-		return;
-	}
-	if (get_task_async_ux_sts(ots)) {
-		trace_binder_set_async_afterpending(t, task, ots, obs, ux_enable, "ux_sts true");
-		return;
-	}
-
-	trace_binder_set_async_afterpending(t, task, ots, obs, ux_enable, "set when br_received");
-	oplus_binder_debug(LOG_SET_ASYNC_AFTER_PENDING, "thread(pid=%d tgid=%d comm=%s) ux_en=%d pending_async=%d set_async_after_pending\n",
-		task->pid, task->tgid, task->comm, ux_enable, obs->pending_async);
-	binder_ux_state_systrace(current, task, STATE_ASYNC_SET_UX_AFTER_PENDING, LOG_BINDER_SYSTRACE_LVL0, t, NULL);
-
-	binder_set_inherit_ux(task, NULL, false, false, t, NULL);
-	obs->pending_async = false;
-}
 static void android_vh_binder_transaction_received_handler(void *unused,
 	struct binder_transaction *t, struct binder_proc *proc, struct binder_thread *thread, uint32_t cmd)
 {
@@ -1009,7 +988,6 @@ static void android_vh_binder_transaction_received_handler(void *unused,
 		return;
 	}
 	set_thread_node_when_br_received(t, thread);
-	set_async_ux_after_pending(t, thread);
 }
 
 static void android_vh_binder_buffer_release_handler(void *unused,
@@ -1045,6 +1023,7 @@ static void android_vh_free_oplus_binder_struct_handler(void *unused, struct bin
 	}
 	trace_binder_t_obs(t, obs, "free_obs");
 	free_oplus_binder_struct(obs);
+	t->android_vendor_data1 = 0;
 }
 
 static bool binder_dynamic_enqueue_work_ilocked(struct binder_work *work,
@@ -1115,7 +1094,6 @@ static bool binder_dynamic_enqueue_work_ilocked(struct binder_work *work,
 
 		insert = true;
 		break;
-
 	}
 
 	if (insert && !IS_ERR_OR_NULL(w) && !IS_ERR_OR_NULL(&w->entry)) {
@@ -1308,48 +1286,6 @@ static struct task_struct *get_current_async_thread(struct binder_transaction *t
 	return NULL;
 }
 
-/* need to double check whether set the same task ux twice is ok or not */
-static bool check_sf_thread_async_ux(struct task_struct *task,
-	struct binder_transaction *t, struct oplus_binder_struct *obs)
-{
-	struct oplus_task_struct *ots = NULL;
-	static int sf_async_ux = 0, sf_sync_ux = 0;
-	bool set_sync_ux = false;
-
-	if (IS_ERR_OR_NULL(task)) {
-		return false;
-	}
-
-	/* old begin */
-	ots = get_oplus_task_struct(current);
-	if (!IS_ERR_OR_NULL(ots)) {
-		if (ots->im_flag == IM_FLAG_SURFACEFLINGER) {
-			if (is_obs_valid(obs) == OBS_VALID &&
-				(obs->async_ux_enable > ASYNC_UX_DISABLE && obs->async_ux_enable < ASYNC_UX_ENABLE_MAX)) {
-				set_sync_ux = false;
-				if (g_sched_debug & LOG_SET_SF_UX) {
-					sf_async_ux++;
-				}
-				trace_binder_ux_task(false, INVALID_VALUE, set_sync_ux, task, INVALID_VALUE,
-					t, NULL, "async_ux set SF async");
-				oplus_binder_debug(LOG_SET_SF_UX, "async current(%d) task(pid:%d tgid:%d comm:%s) sf_async:%d sf_sync: %d\n",
-					current->pid, task->pid, task->tgid, task->comm, sf_async_ux, sf_sync_ux);
-			} else {
-				set_sync_ux = true;
-				if (g_sched_debug & LOG_SET_SF_UX) {
-					sf_sync_ux++;
-				}
-				trace_binder_ux_task(false, INVALID_VALUE, set_sync_ux, task, INVALID_VALUE,
-					t, NULL, "async_ux set SF sync");
-				oplus_binder_debug(LOG_SET_SF_UX, "sync current(%d) ux_task(pid:%d tgid:%d comm:%s) sf_async:%d sf_sync: %d\n",
-					current->pid, task->pid, task->tgid, task->comm, sf_async_ux, sf_sync_ux);
-			}
-		}
-	}
-	/* old end */
-
-	return set_sync_ux;
-}
 static bool async_mode_check_ux(struct binder_proc *proc, struct binder_transaction *t,
 		struct task_struct *binder_th_task, bool sync, bool pending_async,
 		struct task_struct **last_task, bool *force_sync)
@@ -1357,23 +1293,19 @@ static bool async_mode_check_ux(struct binder_proc *proc, struct binder_transact
 	struct oplus_binder_struct *obs = NULL;
 	struct task_struct *ux_task = binder_th_task;
 	bool set_ux = false;
+
 	if (unlikely(!g_sched_enable)) {
 		return false;
 	}
 
 	if (unlikely(!g_async_ux_enable)) {
-		if (check_sf_thread_async_ux(ux_task, t, NULL)) {
+		if (is_allow_sf_binder_ux(current)) {
 			set_ux = true;
 			*force_sync = true;
 		}
 		return set_ux;
 	}
 	obs = get_oplus_binder_struct(t, false);
-	if (check_sf_thread_async_ux(ux_task, t, obs)) {
-		set_ux = true;
-		*force_sync = true;
-		goto end;
-	}
 	if (is_obs_valid(obs) != OBS_VALID) {
 		set_ux = false;
 		trace_binder_ux_task(sync, pending_async, set_ux, ux_task, INVALID_VALUE,
@@ -1411,6 +1343,7 @@ static bool async_mode_check_ux(struct binder_proc *proc, struct binder_transact
 			t, obs, "async_ux set last");
 		goto end;
 	} else {
+		obs->async_ux_no_thread = true;
 		binder_ux_state_systrace(current, NULL, STATE_ASYNC_NO_THREAD_NO_PENDING, LOG_BINDER_SYSTRACE_LVL0, t, proc);
 	}
 end:
@@ -1418,7 +1351,6 @@ end:
 			t, obs, "async_ux end");
 	return set_ux;
 }
-
 
 #else /* CONFIG_OPLUS_FEATURE_SCHED_ASSIST */
 
@@ -1436,6 +1368,55 @@ static bool async_mode_check_ux(struct binder_proc *proc, struct binder_transact
 }
 
 #endif
+
+static void android_vh_binder_set_priority_handler(void *unused,
+	struct binder_transaction *t, struct task_struct *task)
+{
+	struct oplus_binder_struct *obs = NULL;
+	struct oplus_task_struct *ots = NULL;
+
+	if (!g_set_async_ux_after_pending) {
+		return;
+	}
+	if (IS_ERR_OR_NULL(t) || IS_ERR_OR_NULL(task)) {
+		return;
+	}
+	if (binder_is_sync_mode(t->flags)) {
+		return;
+	}
+
+	obs = get_oplus_binder_struct(t, false);
+	if (is_obs_valid(obs) != OBS_VALID) {
+		return;
+	}
+
+	if (!obs->pending_async && !obs->async_ux_no_thread) {
+		binder_ux_state_systrace(current, task, STATE_ASYNC_HAS_THREAD,
+			LOG_BINDER_SYSTRACE_LVL1, t, NULL);
+		return;
+	}
+
+	ots = get_oplus_task_struct(task);
+	if (IS_ERR_OR_NULL(ots)) {
+		return;
+	}
+	if (oplus_get_ux_state(task) && get_task_async_ux_sts(ots)) {
+		binder_ux_state_systrace(current, task, STATE_THREAD_WAS_ASYNC_UX,
+			LOG_BINDER_SYSTRACE_LVL0, t, NULL);
+		return;
+	}
+
+	binder_ux_state_systrace(current, task, STATE_ASYNC_SET_UX_AFTER_NO_THREAD,
+		LOG_BINDER_SYSTRACE_LVL0, t, NULL);
+
+	binder_set_inherit_ux(task, NULL, false, false, t, NULL);
+	obs->pending_async = false;
+	obs->async_ux_no_thread = false;
+
+	oplus_binder_debug(LOG_SET_ASYNC_AFTER_PENDING, "thread(pid = %d tgid = %d comm = %s) \
+		pending_async = %d async_ux_no_thread = %d set_async_after_nothread\n",
+		task->pid, task->tgid, task->comm, obs->pending_async, obs->async_ux_no_thread);
+}
 
 static void android_vh_binder_proc_transaction_finish_handler(void *unused, struct binder_proc *proc,
 		struct binder_transaction *t, struct task_struct *binder_th_task, bool pending_async, bool sync)
@@ -1509,6 +1490,8 @@ void register_binder_sched_vendor_hooks(void)
 		android_vh_free_oplus_binder_struct_handler, NULL);
 	register_trace_android_vh_binder_buffer_release(
 		android_vh_binder_buffer_release_handler, NULL);
+	register_trace_android_vh_binder_set_priority(
+		android_vh_binder_set_priority_handler, NULL);
 }
 
 static void init_oplus_binder_struct(void *ptr)
@@ -1536,4 +1519,5 @@ module_param_named(binder_set_last_async_ux, g_set_last_async_ux, int, 0664);
 module_param_named(binder_set_async_ux_after_pending, g_set_async_ux_after_pending, int, 0664);
 module_param_named(binder_allow_accumulate_ux, allow_accumulate_ux, int, 0664);
 module_param_named(binder_sync_use_t_vendordata, sync_use_t_vendordata, int, 0664);
+module_param_named(binder_unset_async_ux_inrestore, unset_async_ux_inrestore, int, 0664);
 

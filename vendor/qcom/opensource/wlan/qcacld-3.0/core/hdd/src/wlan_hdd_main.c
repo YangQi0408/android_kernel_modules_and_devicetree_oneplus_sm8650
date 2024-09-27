@@ -19226,6 +19226,11 @@ static int  wlan_hdd_state_ctrl_param_create(void)
 	int ret;
 	struct device *dev;
 
+#ifdef OPLUS_FEATURE_SOFTAP_DCS_SWITCH
+//Add for sap and sta connect fail monitor init
+	hostapdConnUeventInit();
+#endif /* OPLUS_FEATURE_SOFTAP_DCS_SWITCH */
+
 	init_completion(&wlan_start_comp);
 	qdf_atomic_init(&wlan_hdd_state_fops_ref);
 
@@ -19296,6 +19301,11 @@ dev_alloc_err:
 
 static void wlan_hdd_state_ctrl_param_destroy(void)
 {
+#ifdef OPLUS_FEATURE_SOFTAP_DCS_SWITCH
+//Add for wifi connect fail monitor
+	hostapdConnUeventDeinit();
+#endif /* OPLUS_FEATURE_SOFTAP_DCS_SWITCH */
+
 	cdev_del(&wlan_hdd_state_cdev);
 	device_destroy(class, device);
 	class_destroy(class);

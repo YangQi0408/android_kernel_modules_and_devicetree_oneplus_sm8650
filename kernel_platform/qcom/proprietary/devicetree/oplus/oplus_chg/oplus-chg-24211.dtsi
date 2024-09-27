@@ -928,6 +928,7 @@
 		reg = <0x55>;
 		qcom,modify-soc-smooth;
 		qcom,modify-soc-calibration;
+		oplus,remove_iterm_taper;
 		qcom,batt_bq28z610;
 		qcom,sha1_key_index = <1>;
 		oplus,batt_num = <2>;

@@ -899,7 +899,7 @@ void configure_ds28e30_parameters(void)
   true - both certificate/digital signature is valid @n
   false or NotAuthecticated - either certificate or digital signature is invalid
 */
-int authenticate_ds28e30(unsigned char sn_num[2][12], int page_number)
+int authenticate_ds28e30(unsigned char sn_num[5][12], int batt_info_num, int page_number)
 {
 	int i;
 	unsigned char flag;
@@ -909,6 +909,7 @@ int authenticate_ds28e30(unsigned char sn_num[2][12], int page_number)
 	unsigned char page_certificate_r[32], page_certificate_s[32];
 	unsigned char challenge[32];
 	unsigned char page_sn[32];
+	bool sn_matched = false;
 
 	if ((ds28e30_read_romno_manid_hardware_version()) == false) {
 		chg_err("%s: read romid failed\n", __func__);
@@ -923,11 +924,18 @@ int authenticate_ds28e30(unsigned char sn_num[2][12], int page_number)
 	for (i = 2; i <= 13; i++)
 		chg_info("%s: read sn[%d] %x\n", __func__, i, page_sn[i]);
 
-	if (strncmp(&page_sn[2], sn_num[0], 12) && (strncmp(&page_sn[2], sn_num[1], 12))) {
+	for (i = 0; i < batt_info_num; i++) {
+		if (strncmp((char *)&page_sn[2], &sn_num[i][0], 12)) {
+			continue;
+		} else {
+			chg_info("%s: sn compare succ. batt_info :%d\n", __func__, i);
+			sn_matched = true;
+			break;
+		}
+	}
+	if (sn_matched == false) {
 		chg_err("%s: sn compare failed\n", __func__);
 		return false;
-	} else {
-		chg_info("%s: sn compare succ\n", __func__);
 	}
 
 	/* read the device public key X&Y */

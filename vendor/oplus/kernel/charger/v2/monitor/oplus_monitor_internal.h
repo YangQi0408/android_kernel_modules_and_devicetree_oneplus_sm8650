@@ -67,6 +67,29 @@ struct deep_dischg_profile {
 	unsigned long init_jiffies;
 };
 
+struct endurance_track_info {
+	int time;
+	int batt_temp;
+	int batt_rm;
+	int soc;
+	int ui_soc;
+	int vol_max;
+	int vol_min;
+	int batt_fcc;
+};
+
+struct super_endurance_mode_info {
+	struct endurance_track_info start_info;
+	struct endurance_track_info end_info;
+
+	int duration_time;
+	int exit_reason;
+	int count;
+	bool uisoc_0;
+	bool pre_status;
+	bool status;
+};
+
 struct oplus_monitor {
 	struct device *dev;
 	struct oplus_mms *err_topic;
@@ -137,6 +160,8 @@ struct oplus_monitor {
 	int batt_fcc_comp;
 	int batt_soh_comp;
 	int uisoc_keep_2_err;
+	struct super_endurance_mode_info sem_info;
+	bool gauge_inited;
 
 	/* charge */
 	int fcc_ma;
@@ -191,10 +216,6 @@ struct oplus_monitor {
 	int usb_status;
 	bool otg_switch_status;
 	bool deep_support;
-	bool super_endurance_mode_status;
-	int super_endurance_mode_start_time;
-	int super_endurance_mode_continue_time;
-	int super_endurance_mode_count;
 
 	/* vooc */
 	bool vooc_online;

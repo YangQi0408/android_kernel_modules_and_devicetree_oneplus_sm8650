@@ -488,7 +488,7 @@ const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
 /*
  * Is this task likely cache-hot:
  */
-static int task_hot(struct task_struct *p, struct lb_env *env)
+__maybe_unused static int task_hot(struct task_struct *p, struct lb_env *env)
 {
 	s64 delta;
 
@@ -593,7 +593,6 @@ bool kthread_is_per_cpu(struct task_struct *p)
 static
 int can_migrate_task(struct task_struct *p, struct lb_env *env)
 {
-	int tsk_cache_hot;
 	/*
 	 * del by oplus.
 	 * int can_migrate = 1;
@@ -671,38 +670,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 		 */
 		return 0;
 	}
-
-	/*
-	 * Aggressive migration if:
-	 * 1) active balance
-	 * 2) destination numa is preferred
-	 * 3) task is cache cold, or
-	 * 4) too many balance attempts have failed.
-	 */
-	if (env->flags & LBF_ACTIVE_LB)
-		return 1;
-
-	tsk_cache_hot = migrate_degrades_locality(p, env);
-	if (tsk_cache_hot == -1)
-		tsk_cache_hot = task_hot(p, env);
-
-	if (tsk_cache_hot <= 0 ||
-	    env->sd->nr_balance_failed > env->sd->cache_nice_tries) {
-		/*
-		 * del by oplus.
-		 * if (tsk_cache_hot == 1) {
-		 * 	schedstat_inc(env->sd->lb_hot_gained[env->idle]);
-		 * 	schedstat_inc(p->se.statistics.nr_forced_migrations);
-		 * }
-		 */
-		return 1;
-	}
-
-	/*
-	 * del by oplus.
-	 * schedstat_inc(p->se.statistics.nr_failed_migrations_hot);
-	 */
-	return 0;
+	return 1;
 }
 
 /*

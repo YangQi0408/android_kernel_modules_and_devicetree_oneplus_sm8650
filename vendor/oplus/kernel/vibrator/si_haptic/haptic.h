@@ -119,7 +119,12 @@ typedef struct led_classdev cdev_t;
 #define DEVICE_ID_1419                      1419
 #define F0_VAL_MIN_1419                     1950
 #define F0_VAL_MAX_1419                     2150
-
+#define OS14_NEW_RING_START                 (371)
+#define OS14_NEW_RING_END                   (410)
+#define ALCLOUDSCAPE_START                  (94)
+#define ALCLOUDSCAPE_END                    (99)
+#define RINGTONE_NOTIF_ALARM_START          (201)
+#define RINGTONE_NOTIF_ALARM_END            (293)
 enum aw8697_haptic_motor_old_test_mode {
     MOTOR_OLD_TEST_TRANSIENT = 1,
     MOTOR_OLD_TEST_STEADY = 2,

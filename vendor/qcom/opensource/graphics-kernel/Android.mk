@@ -53,5 +53,7 @@ endif
 BOARD_VENDOR_KERNEL_MODULES += $(LOCAL_MODULE_PATH)/$(LOCAL_MODULE)
 include $(DLKM_DIR)/Build_external_kernelmodule.mk
 
+include $(LOCAL_PATH)/oplus_sync_fence/Android.mk
+
 endif # DLKM check
 endif # KGSL_ENABLED

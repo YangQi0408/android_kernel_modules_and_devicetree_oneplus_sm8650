@@ -665,6 +665,35 @@
                 "OPLUS_CHG_SPEC_VER_V3P7",
                 "OPLUS_CHG_SPEC_VER_MAX"
             ]
+        },
+        {
+            "name": "endurance_exit_reason",
+            "desc":{
+                "zh": "低压超省退出原因"
+            },
+            "list": [
+                {
+                    "lable": "ENDURANCE_EXIT_SHUTDOWN",
+                    "desc": {
+                        "zh": "电量0%关机退出"
+                    },
+                    "str": "shutdown"
+                },
+                {
+                    "lable": "ENDURANCE_EXIT_CHARGING",
+                    "desc": {
+                        "zh": "插充电器退出"
+                    },
+                    "str": "charging"
+                },
+                {
+                    "lable": "ENDURANCE_EXIT_USER",
+                    "desc": {
+                        "zh": "用户主动退出"
+                    },
+                    "str": "user"
+                }
+            ]
         }
     ],
 

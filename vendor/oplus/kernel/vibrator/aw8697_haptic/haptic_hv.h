@@ -151,11 +151,11 @@ enum {
 #define DEVICE_ID_0809			809
 #define DEVICE_ID_1419			1419
 
-#define DEVICE_ID_0815_F0_1630		1630
-#define DEVICE_ID_0815_F0_1670		1670
-#define DEVICE_ID_0815_F0_1710		1710
-#define DEVICE_ID_0815_F0_1750		1750
-#define DEVICE_ID_0815_F0_1780		1780
+#define DEVICE_ID_0815_F0_1640		1640
+#define DEVICE_ID_0815_F0_1680		1680
+#define DEVICE_ID_0815_F0_1720		1720
+#define DEVICE_ID_0815_F0_1760		1760
+#define DEVICE_ID_0815_F0_1800		1800
 
 #pragma pack(4)
 struct mmap_buf_format {
@@ -224,6 +224,10 @@ struct mmap_buf_format {
 #define INPUT_HIGH				(112)
 #define INPUT_MEDI				(111)
 #define INPUT_LOW				(110)
+#define ALCLOUDSCAPE_START			(94)
+#define ALCLOUDSCAPE_END			(99)
+#define RINGTONE_NOTIF_ALARM_START		(201)
+#define RINGTONE_NOTIF_ALARM_END		(293)
 
 #define OS14_NEW_RING_START			(371)
 #define OS14_NEW_RING_END			(410)
