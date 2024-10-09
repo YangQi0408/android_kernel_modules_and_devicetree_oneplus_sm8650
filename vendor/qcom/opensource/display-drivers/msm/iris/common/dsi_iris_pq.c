@@ -673,7 +673,7 @@ void iris_scaler_gamma_enable(u32 level)
 	iris_init_update_ipopt_t(IRIS_IP_DPP, 0x00, 0x00, 0x01);
 
 	iris_end_dpp(true);
-	IRIS_LOGI("gamma enable=%d", level);
+	IRIS_LOGD("gamma enable=%d", level);
 }
 
 int iris_kickoff(void *phys_enc)

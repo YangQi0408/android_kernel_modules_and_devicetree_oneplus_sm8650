@@ -1611,6 +1611,7 @@ void android_rvh_schedule_handler(void *unused, unsigned int sched_mode, struct 
 	}
 
 #ifdef CONFIG_LOCKING_PROTECT
+	LOCKING_CALL_OP(locking_tick_hit, prev, next);
 	if (unlikely(global_debug_enabled & DEBUG_SYSTRACE) && likely(prev != next))
 		LOCKING_CALL_OP(state_systrace_c, cpu_of(rq), next);
 #endif

@@ -16,6 +16,8 @@
 #define MAX_STRING_CNT              (15)
 #define MAX_AREA_PARAMETER          (10)
 #define UP2CANCEL_PRESSURE_VALUE    (0xFF)
+#define GRIP_SINGLE_CMD_SIZE        (128)
+#define GRIP_ALL_CMD_SIZE           (8192)
 
 typedef enum edge_grip_side {
     TYPE_UNKNOW,

@@ -136,6 +136,7 @@ struct cps_wls_chrg_chip {
 	struct work_struct init_work;
 
 	struct wakeup_source *cps_wls_wake_lock;
+	struct wakeup_source *cps_iic_wake_lock;
 	struct mutex irq_lock;
 	struct mutex i2c_lock;
 	struct mutex glk_lock;
@@ -171,6 +172,7 @@ struct cps_wls_chrg_chip {
 	bool led_on;
 	bool tx_wakeup_flag;
 	bool q_cali_int_flag;
+	bool i2c_ready;
 	uint8_t fw_update_status;
 	uint64_t ble_mac_addr;
 	uint64_t mac_check_data;
@@ -195,6 +197,7 @@ struct cps_wls_chrg_chip *g_chip = NULL;
 
 static DECLARE_WAIT_QUEUE_HEAD(tx_wakeup_irq_waiter);
 static DECLARE_WAIT_QUEUE_HEAD(q_cali_irq_waiter);
+static DECLARE_WAIT_QUEUE_HEAD(i2c_waiter);
 static unsigned long long g_verify_failed_cnt = 0;
 static void cps_set_gpio_value(struct cps_wls_chrg_chip *chip, int gp_num, int value);
 static void cps_set_charge_allow(struct cps_wls_chrg_chip *chip, bool allow);
@@ -1864,7 +1867,13 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 	cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
-
+	__pm_stay_awake(chip->cps_iic_wake_lock);
+	wait_event_interruptible_timeout(i2c_waiter, chip->i2c_ready, msecs_to_jiffies(50));
+	if (!chip->i2c_ready) {
+		cps_wls_log(CPS_LOG_DEBG, "[%s]iic not ready\n", __func__);
+		__pm_relax(chip->cps_iic_wake_lock);
+		return IRQ_HANDLED;
+	}
 	mutex_lock(&chip->irq_lock);
 	cps_wls_set_int_enable();
 
@@ -1873,12 +1882,14 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 	if(irq_flag == CPS_WLS_FAIL) {
 		cps_wls_log(CPS_LOG_ERR, "[%s] read wls irq reg failed\n", __func__);
 		mutex_unlock(&chip->irq_lock);
+		__pm_relax(chip->cps_iic_wake_lock);
 		return IRQ_HANDLED;
 	}
 
 	cps_wls_set_int_clr(irq_flag);
 	mutex_unlock(&chip->irq_lock);
 	cps_wls_tx_irq_handler(chip, irq_flag);
+	__pm_relax(chip->cps_iic_wake_lock);
 	return IRQ_HANDLED;
 }
 
@@ -2554,7 +2565,7 @@ static int wls_sw_en_gpio_init(struct cps_wls_chrg_chip *chip)
 		return -EINVAL;
 	}
 
-	gpio_direction_output(chip->wls_scan_gpio, 0);
+	gpio_direction_output(chip->wls_sw_en_gpio, 0);
 	pinctrl_select_state(chip->cps_pinctrl, chip->wls_sw_en_sleep);
 
 	return 0;
@@ -2889,6 +2900,7 @@ static void cps_wls_lock_work_init(struct cps_wls_chrg_chip *chip)
 	mutex_init(&chip->irq_lock);
 	mutex_init(&chip->i2c_lock);
 	chip->cps_wls_wake_lock = wakeup_source_register(NULL, "cps_wls_wake_lock");
+	chip->cps_iic_wake_lock = wakeup_source_register(NULL, "cps_iic_wake_lock");
 }
 
 
@@ -3156,7 +3168,6 @@ static void init_work_func(struct work_struct *work)
 		}
 	}
 
-	cps_wls_hardware_reset();
 	cps_set_gpio_value(chip, GP_0, 1);/* wakeup */
 	msleep(TX_WAKEUP_WAIT_MS); /* wait for wakeup */
 	if (cps_wls_chipid_check(chip) < 0) {
@@ -3195,6 +3206,7 @@ static void init_work_func(struct work_struct *work)
 		(msecs_to_jiffies(LCD_REG_DELAY_SEC * CPS_MSEC_PER_SEC)));
 
 	cps_set_gpio_value(chip, GP_0, 0);
+	cps_wls_hardware_reset();
 	__pm_relax(chip->cps_wls_wake_lock);
 	return;
 
@@ -3241,6 +3253,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client, const struct i2c_device
 
 	i2c_set_clientdata(client, chip);
 	dev_set_drvdata(&(client->dev), chip);
+	chip->i2c_ready = true;
 	g_chip = chip;
 
 	cps_wls_lock_work_init(chip);
@@ -3322,6 +3335,48 @@ static void cps_wls_chrg_remove(struct i2c_client *client)
 #endif
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+static int cps8601_pm_resume(struct device *dev)
+{
+	struct cps_wls_chrg_chip *chip = dev_get_drvdata(dev);
+
+	if (chip) {
+		chip->i2c_ready = true;
+		cps_wls_log(CPS_LOG_ERR, "[%s]cps8601_pm_resume.\n", __func__);
+		wake_up_interruptible(&i2c_waiter);
+	}
+
+	return 0;
+}
+
+static int cps8601_pm_suspend(struct device *dev)
+{
+	struct cps_wls_chrg_chip *chip = dev_get_drvdata(dev);
+
+	if (chip) {
+		chip->i2c_ready = false;
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops cps8601_pm_ops = {
+	.resume = cps8601_pm_resume,
+	.suspend = cps8601_pm_suspend,
+};
+#else
+static int cps8601_resume(struct i2c_client *client)
+{
+	return 0;
+}
+
+static int cps8601_suspend(struct i2c_client *client, pm_message_t mesg)
+{
+	return 0;
+}
+#endif
+
+
 static const struct i2c_device_id cps_wls_charger_id[] = {
 	{"cps-wls-charger", 0},
 	{},
@@ -3338,6 +3393,9 @@ static struct i2c_driver cps8601_driver = {
 		.name = CPS_WLS_CHRG_DRV_NAME,
 		.owner = THIS_MODULE,
 		.of_match_table = cps_wls_chrg_of_tbl,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+		.pm = &cps8601_pm_ops,
+#endif
 	},
 	.probe = cps_wls_chrg_probe,
 	.remove = cps_wls_chrg_remove,

@@ -44,6 +44,18 @@
 #include "haptic_wave.h"
 #include <linux/wait.h>
 
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+#include "../aw8697_haptic/haptic_feedback.h"
+#endif
+
+#ifdef OPLUS_FEATURE_CHG_BASIC
+#include <soc/oplus/system/boot_mode.h>
+#endif
+
+#ifdef CONFIG_OPLUS_CHARGER_MTK
+#include <mt-plat/mtk_boot_common.h>
+#endif
+
 /* add for DX-2 bringup */
 #define FW_ACTION_HOTPLUG 1
 
@@ -374,8 +386,7 @@ const struct firmware *sih_rtp_load_file_accord_f0(sih_haptic_t *sih_haptic)
     return NULL;
 }
 
-static bool sih_irq_rtp_local_file_handle(sih_haptic_t *sih_haptic,
-	haptic_container_t *rtp_cont)
+static bool sih_irq_rtp_local_file_handle(sih_haptic_t *sih_haptic)
 {
 	uint32_t buf_len = 0;
 	uint32_t cont_len = 0;
@@ -386,21 +397,27 @@ static bool sih_irq_rtp_local_file_handle(sih_haptic_t *sih_haptic,
 	inject_data_cnt = sih_haptic->ram.base_addr >> 2;
 	mutex_lock(&sih_haptic->rtp.rtp_lock);
 
+	if (!sih_haptic->rtp.rtp_file_num) {
+		hp_err("%s:rtp file num is 0, stop!\n", __func__);
+		mutex_unlock(&sih_haptic->rtp.rtp_lock);
+		return false;
+	}
+
 	if (!sih_haptic->rtp.rtp_cnt) {
 		hp_err("%s:rtp_cnt is 0!\n", __func__);
 		mutex_unlock(&sih_haptic->rtp.rtp_lock);
 		return false;
 	}
 
-	if (!rtp_cont) {
+	if (!sih_haptic->rtp.rtp_cont) {
 		hp_err("%s:rtp_container is null, break!\n", __func__);
 		mutex_unlock(&sih_haptic->rtp.rtp_lock);
 		return false;
 	}
 
-	hp_info("%s:rtp_cont->len = %d\n", __func__, rtp_cont->len);
+	hp_info("%s:rtp_cont->len = %d\n", __func__, sih_haptic->rtp.rtp_cont->len);
 
-	cont_len = rtp_cont->len;
+	cont_len = sih_haptic->rtp.rtp_cont->len;
 
 	if ((cont_len - sih_haptic->rtp.rtp_cnt) < inject_data_cnt)
 		buf_len = cont_len - sih_haptic->rtp.rtp_cnt;
@@ -410,7 +427,7 @@ static bool sih_irq_rtp_local_file_handle(sih_haptic_t *sih_haptic,
 	hp_info("%s:buf_len:%d\n", __func__, buf_len);
 	if(buf_len > 0) {
 		ret = sih_haptic->hp_func->write_rtp_data(sih_haptic,
-			&rtp_cont->data[sih_haptic->rtp.rtp_cnt], buf_len);
+			&sih_haptic->rtp.rtp_cont->data[sih_haptic->rtp.rtp_cnt], buf_len);
 
 		if (ret < 0) {
 			sih_haptic->hp_func->stop(sih_haptic);
@@ -446,7 +463,6 @@ static bool sih_irq_rtp_local_file_handle(sih_haptic_t *sih_haptic,
 static irqreturn_t sih_irq_isr(int irq, void *data)
 {
 	sih_haptic_t *sih_haptic = data;
-	haptic_container_t *rtp_cont = sih_haptic->rtp.rtp_cont;
 
 	hp_info("%s:enter! interrupt code number is %d\n", __func__, irq);
 
@@ -457,7 +473,7 @@ static irqreturn_t sih_irq_isr(int irq, void *data)
 		if (sih_haptic->rtp.rtp_init) {
 			while ((!sih_haptic->hp_func->get_rtp_fifo_full_state(sih_haptic)) &&
 				(sih_haptic->chip_ipara.play_mode == SIH_RTP_MODE)) {
-				if (!sih_irq_rtp_local_file_handle(sih_haptic, rtp_cont))
+				if (!sih_irq_rtp_local_file_handle(sih_haptic))
 					break;
 			}
 		} else {
@@ -617,6 +633,7 @@ static void sih_rtp_local_work(sih_haptic_t *sih_haptic, uint8_t mode)
 
 	sih_haptic->rtp.rtp_init = false;
 	sih_vfree_container(sih_haptic, sih_haptic->rtp.rtp_cont);
+	sih_haptic->rtp.rtp_cont = NULL;
 
 	ret = request_firmware(&rtp_file, sih_rtp_name[rtp_file_index],
 		sih_haptic->dev);
@@ -629,6 +646,11 @@ static void sih_rtp_local_work(sih_haptic_t *sih_haptic, uint8_t mode)
 
 	sih_haptic->rtp.rtp_cont = vmalloc(rtp_file->size + sizeof(int));
 	if (!sih_haptic->rtp.rtp_cont) {
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+		(void)oplus_haptic_track_mem_alloc_err(
+				HAPTIC_MEM_ALLOC_TRACK,
+				rtp_file->size + sizeof(int), __func__);
+#endif
 		release_firmware(rtp_file);
 		hp_err("%s:error allocating memory\n", __func__);
 		sih_chip_state_recovery(sih_haptic);
@@ -1404,6 +1426,9 @@ static ssize_t rtp_store(struct device *dev,
 		|| (val >=  NEW_RING_START && val <= NEW_RING_END)
 		|| (val >=  OS12_NEW_RING_START && val <= OS12_NEW_RING_END)
 		|| (val >=  OPLUS_RING_START && val <= OPLUS_RING_END)
+		|| (val >=  OS14_NEW_RING_START && val <= OS14_NEW_RING_END)
+		|| (val >=  ALCLOUDSCAPE_START && val <= ALCLOUDSCAPE_END)
+		|| (val >=  RINGTONE_NOTIF_ALARM_START && val <= RINGTONE_NOTIF_ALARM_END)
 		|| val == RINGTONES_SIMPLE_INDEX
 		|| val == RINGTONES_PURE_INDEX
 		|| val == AUDIO_READY_STATUS)) {
@@ -1433,6 +1458,7 @@ static ssize_t rtp_store(struct device *dev,
 
 	if (!val) {
 		sih_op_clean_status(sih_haptic);
+		sih_haptic->rtp.rtp_file_num = val;
 		sih_haptic->hp_func->stop(sih_haptic);
 		sih_haptic->hp_func->set_rtp_aei(sih_haptic, false);
 		sih_haptic->hp_func->clear_interrupt_state(sih_haptic);
@@ -2342,7 +2368,21 @@ rtp_is_going_on = sih_haptic->hp_func->if_chip_is_mode(sih_haptic, SIH_RTP_MODE)
 		sih_haptic->hp_func->stop(sih_haptic);
 		sih_haptic->chip_ipara.state = SIH_ACTIVE_MODE;
 		sih_haptic->ram.action_mode = SIH_RAM_LOOP_MODE;
-		sih_haptic->hp_func->set_wav_seq(sih_haptic, 0, AW8697_WAVEFORM_INDEX_SINE_CYCLE);
+#ifdef CONFIG_OPLUS_CHARGER_MTK
+		if (get_boot_mode() == META_BOOT || get_boot_mode() == FACTORY_BOOT ||
+			get_boot_mode() == ADVMETA_BOOT || get_boot_mode() == ATE_FACTORY_BOOT)
+#else
+		if (get_boot_mode()== MSM_BOOT_MODE__FACTORY || get_boot_mode() == MSM_BOOT_MODE__RF ||
+			get_boot_mode() == MSM_BOOT_MODE__WLAN)
+#endif
+		{
+			sih_haptic->hp_func->set_drv_bst_vol(sih_haptic, SIH_HAPTIC_MAX_VOL);
+			sih_haptic->hp_func->set_wav_seq(sih_haptic, 0,
+							AW8697_WAVEFORM_INDEX_TRANSIENT);
+		} else {
+			sih_haptic->hp_func->set_wav_seq(sih_haptic, 0,
+							AW8697_WAVEFORM_INDEX_SINE_CYCLE);
+		}
 		if (hrtimer_active(&sih_haptic->timer))
 			hrtimer_cancel(&sih_haptic->timer);
 		mutex_unlock(&sih_haptic->lock);
@@ -3185,6 +3225,12 @@ static ssize_t cali_store(struct device *dev,
 			msleep(200);
 		}
 		sih_haptic->hp_func->upload_f0(sih_haptic, SIH_F0_CALI_LRA);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+		if (sih_haptic->detect.f0_cali_data == 0)
+			(void)oplus_haptic_track_fre_cail(HAPTIC_F0_CALI_TRACK,
+							sih_haptic->detect.tracking_f0,
+							-ERANGE, "f0 out of range");
+#endif
 		mutex_unlock(&sih_haptic->lock);
 	}
 	return count;
@@ -3746,6 +3792,10 @@ static const char* get_rtp_name(uint32_t id, uint32_t f0) {
 	rtp_name = (char*) vmalloc(len);
 	if (!rtp_name) {
 		hp_err("%s: vmalloc failed.\n", __func__);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+		(void)oplus_haptic_track_mem_alloc_err(HAPTIC_MEM_ALLOC_TRACK,
+			len, __func__);
+#endif
 		return NULL;
 	} else {
 		snprintf(rtp_name, len, "%s%s", wave_name, f0_suffix);
@@ -3754,11 +3804,11 @@ static const char* get_rtp_name(uint32_t id, uint32_t f0) {
 }
 #ifdef OPLUS_FEATURE_CHG_BASIC
 //0809 & 08015
-#define OPLUS_162HZ_F0 1630
-#define OPLUS_166HZ_F0 1670
-#define OPLUS_170HZ_F0 1710
-#define OPLUS_174HZ_F0 1750
-#define OPLUS_178HZ_F0 1780
+#define OPLUS_162HZ_F0 1640
+#define OPLUS_166HZ_F0 1680
+#define OPLUS_170HZ_F0 1720
+#define OPLUS_174HZ_F0 1760
+#define OPLUS_178HZ_F0 1800
 
 //1419
 #define OPLUS_197HZ_F0 1980
@@ -3772,16 +3822,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 {
 	switch(sih_haptic->rtp.rtp_file_num) {
 	case SG_INPUT_DOWN_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_302_162Hz);
 			return aw_haptic_0809_rtp_302_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_302_166Hz);
 			return aw_haptic_0809_rtp_302_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_302_170Hz);
 			return aw_haptic_0809_rtp_302_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_302_174Hz);
 			return aw_haptic_0809_rtp_302_174Hz;
 		} else {
@@ -3790,16 +3840,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_UP_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_303_162Hz);
 			return aw_haptic_0809_rtp_303_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_303_166Hz);
 			return aw_haptic_0809_rtp_303_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_303_170Hz);
 			return aw_haptic_0809_rtp_303_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_303_174Hz);
 			return aw_haptic_0809_rtp_303_174Hz;
 		} else {
@@ -3808,16 +3858,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_DOWN_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_304_162Hz);
 			return aw_haptic_0809_rtp_304_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_304_166Hz);
 			return aw_haptic_0809_rtp_304_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_304_170Hz);
 			return aw_haptic_0809_rtp_304_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_304_174Hz);
 			return aw_haptic_0809_rtp_304_174Hz;
 		} else {
@@ -3826,16 +3876,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_UP_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_305_162Hz);
 			return aw_haptic_0809_rtp_305_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_305_166Hz);
 			return aw_haptic_0809_rtp_305_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_305_170Hz);
 			return aw_haptic_0809_rtp_305_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_305_174Hz);
 			return aw_haptic_0809_rtp_305_174Hz;
 		} else {
@@ -3844,16 +3894,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_110_162Hz);
 			return aw_haptic_0809_rtp_110_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_110_166Hz);
 			return aw_haptic_0809_rtp_110_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_110_170Hz);
 			return aw_haptic_0809_rtp_110_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_110_174Hz);
 			return aw_haptic_0809_rtp_110_174Hz;
 		} else {
@@ -3862,16 +3912,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_MEDI:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_111_162Hz);
 			return aw_haptic_0809_rtp_111_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_111_166Hz);
 			return aw_haptic_0809_rtp_111_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_111_170Hz);
 			return aw_haptic_0809_rtp_111_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_111_174Hz);
 			return aw_haptic_0809_rtp_111_174Hz;
 		} else {
@@ -3880,16 +3930,16 @@ static uint8_t *custom_0809_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_112_162Hz);
 			return aw_haptic_0809_rtp_112_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_112_166Hz);
 			return aw_haptic_0809_rtp_112_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_112_170Hz);
 			return aw_haptic_0809_rtp_112_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0809_rtp_112_174Hz);
 			return aw_haptic_0809_rtp_112_174Hz;
 		} else {
@@ -3909,16 +3959,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 {
 	switch(sih_haptic->rtp.rtp_file_num) {
 	case SG_INPUT_DOWN_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_302_162Hz);
 			return aw_haptic_0815_rtp_302_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_302_166Hz);
 			return aw_haptic_0815_rtp_302_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_302_170Hz);
 			return aw_haptic_0815_rtp_302_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_302_174Hz);
 			return aw_haptic_0815_rtp_302_174Hz;
 		} else {
@@ -3927,16 +3977,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_UP_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_303_162Hz);
 			return aw_haptic_0815_rtp_303_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_303_166Hz);
 			return aw_haptic_0815_rtp_303_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_303_170Hz);
 			return aw_haptic_0815_rtp_303_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_303_174Hz);
 			return aw_haptic_0815_rtp_303_174Hz;
 		} else {
@@ -3945,16 +3995,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_DOWN_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_304_162Hz);
 			return aw_haptic_0815_rtp_304_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_304_166Hz);
 			return aw_haptic_0815_rtp_304_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_304_170Hz);
 			return aw_haptic_0815_rtp_304_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_304_174Hz);
 			return aw_haptic_0815_rtp_304_174Hz;
 		} else {
@@ -3963,16 +4013,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case SG_INPUT_UP_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_305_162Hz);
 			return aw_haptic_0815_rtp_305_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_305_166Hz);
 			return aw_haptic_0815_rtp_305_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_305_170Hz);
 			return aw_haptic_0815_rtp_305_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_305_174Hz);
 			return aw_haptic_0815_rtp_305_174Hz;
 		} else {
@@ -3981,16 +4031,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_LOW:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_110_162Hz);
 			return aw_haptic_0815_rtp_110_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_110_166Hz);
 			return aw_haptic_0815_rtp_110_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_110_170Hz);
 			return aw_haptic_0815_rtp_110_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_110_174Hz);
 			return aw_haptic_0815_rtp_110_174Hz;
 		} else {
@@ -3999,16 +4049,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_MEDI:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_111_162Hz);
 			return aw_haptic_0815_rtp_111_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_111_166Hz);
 			return aw_haptic_0815_rtp_111_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_111_170Hz);
 			return aw_haptic_0815_rtp_111_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_111_174Hz);
 			return aw_haptic_0815_rtp_111_174Hz;
 		} else {
@@ -4017,16 +4067,16 @@ static uint8_t *custom_0815_rtp_key_file(struct sih_haptic *sih_haptic, uint32_t
 		}
 		break;
 	case INPUT_HIGH:
-		if (sih_haptic->detect.tracking_f0 <= OPLUS_162HZ_F0) {
+		if (sih_haptic->detect.tracking_f0 < OPLUS_162HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_112_162Hz);
 			return aw_haptic_0815_rtp_112_162Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_166HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_166HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_112_166Hz);
 			return aw_haptic_0815_rtp_112_166Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_170HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_170HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_112_170Hz);
 			return aw_haptic_0815_rtp_112_170Hz;
-		} else if (sih_haptic->detect.tracking_f0 <= OPLUS_174HZ_F0) {
+		} else if (sih_haptic->detect.tracking_f0 < OPLUS_174HZ_F0) {
 			*data_len = sizeof(aw_haptic_0815_rtp_112_174Hz);
 			return aw_haptic_0815_rtp_112_174Hz;
 		} else {
@@ -4217,6 +4267,8 @@ static void rtp_work_func(struct work_struct *work)
 
 	sih_haptic->rtp.rtp_init = false;
 	sih_vfree_container(sih_haptic, sih_haptic->rtp.rtp_cont);
+	sih_haptic->rtp.rtp_cont = NULL;
+
 	if ((DEVICE_ID_0815 == sih_haptic->device_id || DEVICE_ID_0809 == sih_haptic->device_id
 		|| DEVICE_ID_1419 == sih_haptic->device_id) &&
 		 ((sih_haptic->rtp.rtp_file_num >= 302 && sih_haptic->rtp.rtp_file_num <= 305) ||
@@ -4243,6 +4295,10 @@ static void rtp_work_func(struct work_struct *work)
 			hp_err("%s:error allocating memory\n", __func__);
 			sih_chip_state_recovery(sih_haptic);
 			mutex_unlock(&sih_haptic->rtp.rtp_lock);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+			(void)oplus_haptic_track_mem_alloc_err(HAPTIC_MEM_ALLOC_TRACK,
+					haptic_rtp_key_data_len + sizeof(int), __func__);
+#endif
 			return;
 		}
 		sih_haptic->rtp.rtp_cont->len = haptic_rtp_key_data_len;
@@ -4271,6 +4327,10 @@ static void rtp_work_func(struct work_struct *work)
 
 		sih_haptic->rtp.rtp_cont = vmalloc(rtp_file->size + sizeof(int));
 		if (!sih_haptic->rtp.rtp_cont) {
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+			(void)oplus_haptic_track_mem_alloc_err(HAPTIC_MEM_ALLOC_TRACK,
+					rtp_file->size + sizeof(int), __func__);
+#endif
 			release_firmware(rtp_file);
 			hp_err("%s:error allocating memory\n", __func__);
 			sih_chip_state_recovery(sih_haptic);
@@ -4305,7 +4365,7 @@ static void rtp_work_func(struct work_struct *work)
 		hp_info("%s:wait for rtp go!\n", __func__);
 		usleep_range(2000, 2500);
 	}
-	if (rtp_work_flag) {
+	if (rtp_work_flag && sih_haptic->rtp.rtp_file_num != 0) {
 		sih_rtp_play(sih_haptic, SIH_RTP_NORMAL_PLAY);
 	} else {
 		sih_haptic->hp_func->stop(sih_haptic);
@@ -4579,6 +4639,8 @@ static int sih_i2c_remove(struct i2c_client *i2c)
 	haptic_regmap_remove(sih_haptic->regmapp.regmapping);
 	/* container release */
 	sih_vfree_container(sih_haptic, sih_haptic->rtp.rtp_cont);
+	sih_haptic->rtp.rtp_cont = NULL;
+
 	/* reg addr release */
 	if (sih_haptic->chip_reg.reg_addr != NULL)
 		kfree(sih_haptic->chip_reg.reg_addr);
@@ -4608,6 +4670,8 @@ static void sih_i2c_remove(struct i2c_client *i2c)
 	haptic_regmap_remove(sih_haptic->regmapp.regmapping);
 	/* container release */
 	sih_vfree_container(sih_haptic, sih_haptic->rtp.rtp_cont);
+	sih_haptic->rtp.rtp_cont = NULL;
+
 	/* reg addr release */
 	if (sih_haptic->chip_reg.reg_addr != NULL)
 		kfree(sih_haptic->chip_reg.reg_addr);

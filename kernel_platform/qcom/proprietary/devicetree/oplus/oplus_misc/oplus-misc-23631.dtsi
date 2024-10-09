@@ -8,7 +8,7 @@
 	qcom,vibrator-type = <809>;//ela0809
 	qcom,drv-duty = <4>;//75%
 	qcom,vbat-low-soc = <5>;
-	qcom,vbat-low-fifo-vmax-mv = <6600>;
+	qcom,vbat-low-fifo-vmax-mv = <6200>;
 };
 
 &soc {
@@ -18,7 +18,7 @@
 };
 
 &pm8550b_eusb2_repeater {
-	qcom,param-override-seq = <0x0e 0x51 0x07 0x53 0x05 0x54 0x03 0x55 0x07 0x57>;
+	qcom,param-override-seq = <0x0d 0x51 0x07 0x53 0x04 0x54 0x03 0x55 0x05 0x57>;
 	qcom,param-override-seq-host = <0x0b 0x51 0x07 0x53 0x05 0x54 0x02 0x55 0x06 0x57>;
 };
 
@@ -32,6 +32,8 @@
 	dwc3@a600000 {
 		usb-phy = <&eusb2_phy0>, <&usb_nop_phy>;
 		maximum-speed = "high-speed";
+		snps,usb2-lpm-disable;
+		snps,usb2-gadget-lpm-disable;
 		dr_mode = "otg";
 	};
 };
@@ -54,4 +56,14 @@
 	periph-d44-supply = <0>;
 	periph-d45-supply = <0>;
 	periph-d46-supply = <0>;
+};
+
+&pm8550b_bcl {
+	compatible = "qcom,bcl-v5";
+	bcl,support_track;
+};
+
+&pm8550_bcl {
+	compatible = "qcom,bcl-v5";
+	bcl,support_track;
 };

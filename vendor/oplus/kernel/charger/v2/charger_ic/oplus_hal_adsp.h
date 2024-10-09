@@ -529,6 +529,7 @@ struct battery_chg_dev {
 	struct oplus_impedance_node	*input_imp_node;
 	struct oplus_mms		*common_topic;
 	struct oplus_mms		*pps_topic;
+	struct oplus_mms		*ufcs_topic;
 	struct oplus_mms		*gauge_topic;
 	struct votable			*chg_disable_votable;
 	struct mutex			chg_en_lock;

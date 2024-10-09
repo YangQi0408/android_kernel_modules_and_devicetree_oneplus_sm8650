@@ -4078,7 +4078,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
 	}
 
 	if (ts->pen_support) {	/* Default to enable pen function when boot up */
-			ts->is_pen_connected = 1;
+			ts->is_pen_connected = 0;
 			ts->is_pen_attracted = 0;
 	}
 
@@ -4604,7 +4604,6 @@ static void tp_resume(struct device *dev)
 	ts->is_suspended = 0;
 	ts->suspend_state = TP_RESUME_COMPLETE;
 	ts->disable_gesture_ctrl = false;
-	ts->hall_status = false;
 
 	if (ts->loading_fw) {
 		goto NO_NEED_RESUME;

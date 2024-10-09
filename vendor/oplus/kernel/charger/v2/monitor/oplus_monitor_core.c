@@ -229,6 +229,11 @@ static bool oplus_monitor_all_topic_is_ready(struct oplus_monitor *chip)
 		return false;
 	}
 
+	if (!chip->gauge_inited) {
+		chg_err("gauge data not init\n");
+		return false;
+	}
+
 	return true;
 }
 
@@ -543,6 +548,7 @@ static void oplus_monitor_subscribe_gauge_topic(struct oplus_mms *topic,
 	chip->batt_fcc_comp = min(chip->batt_fcc + chip->batt_fcc_coeff * chip->batt_soh / 100,
 		oplus_gauge_get_batt_capacity_mah(chip->gauge_topic));
 	chip->batt_soh_comp = min(chip->batt_soh + chip->batt_soh_coeff * chip->batt_soh / 100, 100);
+	chip->gauge_inited = true;
 }
 
 static void oplus_monitor_ufcs_subs_callback(struct mms_subscribe *subs,
@@ -1189,12 +1195,13 @@ static void oplus_monitor_comm_subs_callback(struct mms_subscribe *subs,
 			break;
 		case COMM_ITEM_SUPER_ENDURANCE_STATUS:
 			oplus_mms_get_item_data(chip->comm_topic, id, &data, false);
-			chip->super_endurance_mode_status = !!data.intval;
-			oplus_chg_track_super_endurance_mode_change(chip);
+			chip->sem_info.status = !!data.intval;
+			if (!chip->sem_info.uisoc_0)
+				oplus_chg_track_super_endurance_mode_change(chip);
 			break;
 		case COMM_ITEM_SUPER_ENDURANCE_COUNT:
 			oplus_mms_get_item_data(chip->comm_topic, id, &data, false);
-			chip->super_endurance_mode_count = data.intval;
+			chip->sem_info.count = data.intval;
 			break;
 		case COMM_ITEM_UISOC_KEEP_2_ERROR:
 			oplus_mms_get_item_data(chip->comm_topic, id, &data, false);

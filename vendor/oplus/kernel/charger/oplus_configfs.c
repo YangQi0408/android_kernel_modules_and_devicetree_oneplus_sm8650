@@ -729,14 +729,14 @@ static ssize_t normal_current_now_store(struct device *dev, struct device_attrib
 	chg_err("val:%d\n", val);
 	if (!chip->led_on) {
 		if (chip->smart_normal_cool_down == 0) {
-			if (oplus_pps_get_support_type() != PPS_SUPPORT_NOT) {
+			if (oplus_pps_get_chg_status() == PPS_CHARGERING) {
 				chip->normal_cool_down = oplus_convert_pps_current_to_level(chip, val);
 			} else if (oplus_ufcs_get_chg_status() == UFCS_CHARGERING) {
 				chip->normal_cool_down = oplus_convert_pps_current_to_level(chip, val);
 			} else {
 				chip->normal_cool_down = oplus_convert_current_to_level(chip, val);
 			}
-			chg_err("set normal_cool_down:%d\n", val);
+			chg_err("set normal_cool_down:%d\n", chip->normal_cool_down);
 		}
 	}
 

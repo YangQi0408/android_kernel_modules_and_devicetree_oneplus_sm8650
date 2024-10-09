@@ -1871,6 +1871,12 @@ static int oplus_ofp_set_panel_hbm(void *sde_connector, bool hbm_en)
 	/* delay before hbm cmds */
 	oplus_ofp_hbm_wait_handle(c_conn, hbm_en);
 
+	if (!hbm_en && p_oplus_ofp_params->aod_unlocking) {
+		p_oplus_ofp_params->aod_unlocking = false;
+		OFP_INFO("oplus_ofp_aod_unlocking:%d\n", p_oplus_ofp_params->aod_unlocking);
+		OPLUS_OFP_TRACE_INT("oplus_ofp_aod_unlocking", p_oplus_ofp_params->aod_unlocking);
+	}
+
 	if (oplus_ofp_local_hbm_is_enabled()) {
 		/* send lhbm pressed icon cmds */
 		if (hbm_en) {
@@ -1907,12 +1913,6 @@ static int oplus_ofp_set_panel_hbm(void *sde_connector, bool hbm_en)
 			}
 		}
 		OFP_INFO("hbm cmds are flushed\n");
-	}
-
-	if (!hbm_en && p_oplus_ofp_params->aod_unlocking) {
-		p_oplus_ofp_params->aod_unlocking = false;
-		OFP_INFO("oplus_ofp_aod_unlocking:%d\n", p_oplus_ofp_params->aod_unlocking);
-		OPLUS_OFP_TRACE_INT("oplus_ofp_aod_unlocking", p_oplus_ofp_params->aod_unlocking);
 	}
 
 	OPLUS_OFP_TRACE_END("oplus_ofp_set_panel_hbm");

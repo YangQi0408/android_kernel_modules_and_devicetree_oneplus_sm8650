@@ -242,8 +242,7 @@ static long memo_file_unlocked_ioctl(struct file *file,
 		hp_info("%s:gain mode enter\n", __func__);
 		if (arg > SIH_HAPTIC_GAIN_LIMIT)
 			arg = SIH_HAPTIC_GAIN_LIMIT;
-		if (sih_haptic->stream_para.stream_mode)
-			sih_haptic->hp_func->set_gain(sih_haptic, arg);
+		sih_haptic->hp_func->set_gain(sih_haptic, arg);
 		break;
 	case IOCTL_STREAM_MODE:
 		hp_info("%s:stream mode enter\n", __func__);

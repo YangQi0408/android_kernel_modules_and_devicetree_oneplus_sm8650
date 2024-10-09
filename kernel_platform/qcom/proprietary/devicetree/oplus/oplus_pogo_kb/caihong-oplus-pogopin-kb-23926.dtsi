@@ -12,7 +12,7 @@
 
 		config {
 			pins = "gpio62";
-			drive-strength = <2>;
+			drive-strength = <8>;
 			bias-disable;
 		};
 	};
@@ -77,10 +77,10 @@
 		config {
 			pins = "gpio137";
 			drive-strength = <2>;
-			bias-disable;
+			bias-pull-up;
 			input-enable;
 		};
-	};
+    };
 
     pogo_power_enable: pogo_power_enable {
         mux {
@@ -125,13 +125,14 @@
         pinctrl-6 = <&pogo_power_disable>;
 
         tty-name-string = "ttyHS5";
+        pogopin-battery-support;
         keyboard-name-strings =
-            "OPPO Smart Touchpad Keyboard",
-            "OnePlus Smart Keyboard",
-            "OnePlus Smart Keyboard";
+            "OPPO Pad 3 Pro Keyboard(Pogo Pin)",
+            "OnePlus Pad Pro Keyboard(Pogo Pin)",
+            "OnePlus Pad Smart Keyboard(Pogo Pin)";
         keyboard-ble-name-strings =
-            "OPPO Touchpad Keyboard",
-            "OnePlus Pad Smart Keyboard",
+            "OPPO Pad 3 Pro Keyboard",
+            "OnePlus Pad Pro Keyboard",
             "OnePlus Pad Smart Keyboard";
         touchpad-xy-max = <2764 1630>;
     };

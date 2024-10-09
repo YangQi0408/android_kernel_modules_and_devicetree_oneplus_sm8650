@@ -81,4 +81,17 @@ struct puc_strategy_ret_data {
 	bool exit;
 };
 
+struct ddrc_strategy_data {
+	int32_t count;
+	int32_t vbat0;
+	int32_t vbat1;
+	int32_t index;
+} __attribute__((packed));
+
+struct ddrc_temp_curves {
+	struct ddrc_strategy_data *data;
+	int index_r;
+	int index_t;
+	int num;
+};
 #endif /* __OPLUS_STRATEGY_H__ */

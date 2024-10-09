@@ -40,6 +40,9 @@ def define_oplus_local_modules():
         local_defines = [
                  "BUILD_BY_BAZEL",
         ],
+        conditional_defines = {
+            "mtk":  ["CONFIG_TOUCHPANEL_MTK_PLATFORM"],
+        },
 
     )
 

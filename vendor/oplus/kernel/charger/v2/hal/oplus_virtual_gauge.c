@@ -1868,7 +1868,6 @@ static int oplus_chg_vg_afi_update_done(struct oplus_chg_ic_dev *ic_dev, bool *s
 	return rc;
 }
 
-
 static int oplus_chg_vg_check_reset_condition(struct oplus_chg_ic_dev *ic_dev,
 					bool *need_reset)
 {
@@ -2104,6 +2103,65 @@ static int oplus_chg_vg_get_batt_deep_term_volt(struct oplus_chg_ic_dev *ic_dev,
 		rc = oplus_chg_ic_func(chip->child_list[i].ic_dev, OPLUS_IC_FUNC_GAUGE_GET_DEEP_TERM_VOLT, volt);
 		if (rc < 0)
 			chg_err("child ic[%d] get battery deep term volt error, rc=%d\n", i, rc);
+		break;
+	}
+
+	return rc;
+}
+
+static int oplus_chg_vg_set_last_cc(struct oplus_chg_ic_dev *ic_dev, int *cc)
+
+{
+	struct oplus_virtual_gauge_ic *chip;
+	int i;
+	int rc = 0;
+
+	if (ic_dev == NULL) {
+		chg_err("oplus_chg_ic_dev is NULL");
+		return -ENODEV;
+	}
+
+	/* TODO: check common config */
+
+	chip = oplus_chg_ic_get_drvdata(ic_dev);
+	for (i = 0; i < chip->child_num; i++) {
+		if (!func_is_support(&chip->child_list[i],
+				     OPLUS_IC_FUNC_GAUGE_SET_LAST_CC)) {
+			rc = (rc == 0) ? -ENOTSUPP : rc;
+			continue;
+		}
+		rc = oplus_chg_ic_func(chip->child_list[i].ic_dev,
+				       OPLUS_IC_FUNC_GAUGE_SET_LAST_CC, cc);
+		if (rc < 0)
+			chg_err("child ic[%d] set last cc error, rc=%d\n",
+				i, rc);
+		break;
+	}
+
+	return rc;
+}
+
+static int oplus_chg_vg_get_last_cc(struct oplus_chg_ic_dev *ic_dev, int *cc)
+
+{
+	struct oplus_virtual_gauge_ic *chip;
+	int i;
+	int rc = 0;
+
+	if (ic_dev == NULL) {
+		chg_err("oplus_chg_ic_dev is NULL");
+		return -ENODEV;
+	}
+
+	chip = oplus_chg_ic_get_drvdata(ic_dev);
+	for (i = 0; i < chip->child_num; i++) {
+		if (!func_is_support(&chip->child_list[i], OPLUS_IC_FUNC_GAUGE_GET_LAST_CC)) {
+			rc = (rc == 0) ? -ENOTSUPP : rc;
+			continue;
+		}
+		rc = oplus_chg_ic_func(chip->child_list[i].ic_dev, OPLUS_IC_FUNC_GAUGE_GET_LAST_CC, cc);
+		if (rc < 0)
+			chg_err("child ic[%d] get last cc error, rc=%d\n", i, rc);
 		break;
 	}
 
@@ -2560,6 +2618,14 @@ static void *oplus_chg_vg_get_func(struct oplus_chg_ic_dev *ic_dev,
 	case OPLUS_IC_FUNC_GAUGE_GET_DEEP_TERM_VOLT:
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_GET_DEEP_TERM_VOLT,
 			oplus_chg_vg_get_batt_deep_term_volt);
+		break;
+	case OPLUS_IC_FUNC_GAUGE_SET_LAST_CC:
+		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_SET_LAST_CC,
+			oplus_chg_vg_set_last_cc);
+		break;
+	case OPLUS_IC_FUNC_GAUGE_GET_LAST_CC:
+		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_GET_LAST_CC,
+			oplus_chg_vg_get_last_cc);
 		break;
 	default:
 		chg_err("this func(=%d) is not supported\n", func_id);

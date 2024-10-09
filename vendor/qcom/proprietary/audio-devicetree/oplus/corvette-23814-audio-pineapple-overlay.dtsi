@@ -145,7 +145,7 @@
 		sipa_max_range = <8000>;
 		sipa_default_mohm = <6000>;
 		sipa_min_freq = <630>;
-		sipa_max_freq = <850>;
+		sipa_max_freq = <920>;
 		is_use_freq = <1>;
 	};
 };

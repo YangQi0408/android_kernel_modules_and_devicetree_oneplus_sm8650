@@ -37,7 +37,9 @@ static char __oplus_chg_cmdline[COMMAND_LINE_SIZE];
 static char *oplus_chg_cmdline = __oplus_chg_cmdline;
 
 #define BATT_SN_NUM_LEN				12
-#define BATT_NUM				2
+#define BATT_NUM_MAX				5
+#define MAX_SN_NUM_SIZE		BATT_NUM_MAX * BATT_SN_NUM_LEN
+
 #define AUTH_MESSAGE_LEN			20
 #define OPLUS_MAXIM_AUTH_TAG		"maxim_auth="
 #define OPLUS_MAXIM_AUTH_SUCCESS	"maxim_auth=TRUE"
@@ -56,7 +58,8 @@ struct oplus_maxim_gauge_chip {
 	struct pinctrl_state *maxim_active;
 	int data_gpio;
 	struct onewire_gpio_data gpio_info;
-	unsigned char sn_num[BATT_NUM][BATT_SN_NUM_LEN];
+	unsigned char sn_num[BATT_NUM_MAX][BATT_SN_NUM_LEN];
+	int batt_info_num;
 	struct delayed_work maxim_err_track_work;
 };
 
@@ -115,8 +118,10 @@ static bool oplus_maxim_check_auth_msg(void)
 
 static int oplus_maxim_parse_dt(struct oplus_maxim_gauge_chip *chip)
 {
-	int rc, len, i;
+	int rc, len, i, j;
 	struct device_node *node = chip->dev->of_node;
+	unsigned char sn_num_total[MAX_SN_NUM_SIZE] = {0};
+
 	chip->maxim_in_kernel_init_ok = false;
 	chip->support_maxim_in_lk = of_property_read_bool(node, "support_encryption_in_lk");
 	chg_info("support_maxim_in_lk: %d\n", chip->support_maxim_in_lk);
@@ -224,32 +229,25 @@ static int oplus_maxim_parse_dt(struct oplus_maxim_gauge_chip *chip)
 	chg_info("maxim_in_kernel_init_ok: %d\n", chip->maxim_in_kernel_init_ok);
 
 	len = of_property_count_u8_elems(node, "oplus,batt_info");
-	if (len < 0 || len > BATT_SN_NUM_LEN) {
+	if (len < 0 || len > MAX_SN_NUM_SIZE) {
 		chg_info("Count oplus,batt_info failed, rc = %d\n", len);
 		return -1;
 	}
 
-	rc = of_property_read_u8_array(node, "oplus,batt_info", chip->sn_num[0], len);
+	rc = of_property_read_u8_array(node, "oplus,batt_info", sn_num_total,
+		len > MAX_SN_NUM_SIZE ? MAX_SN_NUM_SIZE : len);
 	if (rc) {
 		chg_err("maxim get oplus,batt_info failed %d\n", rc);
 		return -1;
 	}
-	for (i = 0; i < len; i++) {
-		chg_info("parse oplus,batt_info, sn_num0[%d] = %x\n", i, chip->sn_num[0][i]);
-	}
 
-	len = of_property_count_u8_elems(node, "oplus,batt_info_1");
-	if (len < 0 || len > BATT_SN_NUM_LEN) {
-		chg_info("Count oplus,batt_info_1 failed, rc = %d\n", len);
-		return -1;
-	}
-
-	rc = of_property_read_u8_array(node, "oplus,batt_info_1", chip->sn_num[1], len);
-	if (rc) {
-		chg_err("Does not support secondary battery %d\n", rc);
-	}
-	for (i = 0; i < len; i++) {
-		chg_info("parse oplus,batt_info_1, sn_num_1[%d] = %x\n", i, chip->sn_num[1][i]);
+	chip->batt_info_num = len / BATT_SN_NUM_LEN;
+	for (i = 0; i < chip->batt_info_num; i++) {
+		memcpy(chip->sn_num[i], &sn_num_total[i * BATT_SN_NUM_LEN], BATT_SN_NUM_LEN);
+		chg_info("parse oplus,batt_info, batt_info_%d: \n", i);
+		for (j = 0; j < BATT_SN_NUM_LEN; j++) {
+			chg_info(" %x", chip->sn_num[i][j]);
+		}
 	}
 
 	return 0;
@@ -297,7 +295,7 @@ static int oplus_maxim_guage_get_batt_auth(struct oplus_chg_ic_dev *ic_dev, bool
 
 	if (chip->authenticate_result == false && chip->maxim_in_kernel_init_ok) {
 		onewire_set_gpio_config_out();
-		flag = authenticate_ds28e30(chip->sn_num, 0);
+		flag = authenticate_ds28e30(chip->sn_num, chip->batt_info_num, 0);
 		if (flag== true) {
 			chg_info("%s: re Authenticated flag %d succ\n", __func__, flag);
 			chip->authenticate_result = true;
@@ -430,7 +428,7 @@ static int oplus_maxim_probe(struct platform_device *pdev)
 		} else {
 			while (retry < OPLUS_MAXIM_MAX_RETRY) {
 				mdelay(100);
-				flag = authenticate_ds28e30(maxim_chip->sn_num, 0);
+				flag = authenticate_ds28e30(maxim_chip->sn_num, maxim_chip->batt_info_num, 0);
 				if (flag == true) {
 					chg_info("%s: Authenticated flag %d succ\n", __func__, flag);
 					maxim_chip->authenticate_result = true;

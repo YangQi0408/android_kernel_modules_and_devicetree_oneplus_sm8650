@@ -35,6 +35,7 @@ static struct hall_srs ak09970_ranges[] = {
 };
 
 static DEFINE_MUTEX(ak09970_i2c_mutex);
+static DEFINE_MUTEX(ak09970_getData_mutex);
 
 #define MAX_I2C_RETRY_TIME 2
 static int ak09970_i2c_read_block(struct oplus_dhall_chip *chip, u8 addr, u8 *data, u8 len)
@@ -172,7 +173,7 @@ static int mysqrt(long x)
 
 static int ak09970_get_data(struct dhall_data_xyz *data)
 {
-	int err = 0;
+	int ret = 0;
 	int irqval = 0;
 	u8 buf[7] = {0};
 	short value_x = 0;
@@ -187,12 +188,12 @@ static int ak09970_get_data(struct dhall_data_xyz *data)
 	}
 
 	msleep(35);
-
+	mutex_lock(&ak09970_getData_mutex);
 	/* (1) read data */
-	err = ak09970_i2c_read_block(g_chip, AK09970_REG_ST1_ZYX/*0x17*/, buf, sizeof(buf));
-	if (err < 0) {
-		TRI_KEY_LOG(" fail %d \n", err);
-		return err;
+	ret = ak09970_i2c_read_block(g_chip, AK09970_REG_ST1_ZYX/*0x17*/, buf, sizeof(buf));
+	if (ret < 0) {
+		TRI_KEY_LOG(" fail %d \n", ret);
+		goto OUT;
 	}
 
 	/* (2) collect data*/
@@ -202,17 +203,18 @@ static int ak09970_get_data(struct dhall_data_xyz *data)
 		value_y = (short)((u16)(buf[3] << 8) + buf[4]);
 		value_z = (short)((u16)(buf[1] << 8) + buf[2]);
 	} else {
-		TRI_KEY_LOG("ak09970 hall: st1(0x%02X%02X) is not DRDY.\n",  buf[0], buf[1]);
-		data->hall_x = value_x;
-		data->hall_y = value_y;
-		data->hall_z = value_z;
+		TRI_KEY_LOG("ak09970 hall:st1(0x%02X%02X) NO_DRDY.\n", buf[0], buf[1]);
+		TRI_KEY_LOG("ak09970 hall->[x:%d][y:%d][z:%d]\n", data->hall_x, data->hall_y, data->hall_z);
+		// data->hall_x = value_x;
+		// data->hall_y = value_y;
+		// data->hall_z = value_z;
 		data->st = st;
-		return err;
+		goto OUT;
 	}
-	err = ak09970_i2c_read_block(g_chip, AK09970_REG_ST1_V, buf, sizeof(buf));
-	if (err < 0) {
-		TRI_KEY_LOG(" ak09970_i2c_read_block AK09970_REG_ST1_V fail %d \n", err);
-		return err;
+	ret = ak09970_i2c_read_block(g_chip, AK09970_REG_ST1_V, buf, sizeof(buf));
+	if (ret < 0) {
+		TRI_KEY_LOG(" ak09970_i2c_read_block AK09970_REG_ST1_V fail %d \n", ret);
+		goto OUT;
 	}
 	if (buf[0] & 0x01) {
 		value_v = (long)(value_x * value_x) +(long)(value_y * value_y) + (long)(value_z * value_z);
@@ -229,7 +231,10 @@ static int ak09970_get_data(struct dhall_data_xyz *data)
 	TRI_KEY_LOG("new hall value is x %d, y %d, z %d v %d \n",
 			   value_x, value_y, value_z, data->hall_v);
 	TRI_KEY_LOG("%s  read irq is %d\n" , __func__, irqval);
-	return 0;
+
+OUT:
+	mutex_unlock(&ak09970_getData_mutex);
+	return ret;
 }
 
 static void ak09970_dump_reg(struct seq_file *s)
@@ -613,7 +618,7 @@ static bool ak09970_update_threshold(int position, short lowthd, short highthd, 
 		vlow = halldata->hall_v + XBRP_TOL;
 		vhigh = halldata->hall_v + XBOP_TOL;
 		ak09970_inttobuff(vth, vlow, vhigh);
-		TRI_KEY_LOG("DOWN_STATE xlow=%d,xhigh=%d, ylow=%d,yhigh=%d, vlow=%d, vhigh = %d\n", lowthd, highthd, second_low, second_high, vlow, vhigh);
+		TRI_KEY_LOG("MID_STATE xlow=%d,xhigh=%d, ylow=%d,yhigh=%d, vlow=%d, vhigh = %d\n", lowthd, highthd, second_low, second_high, vlow, vhigh);
 		err = ak09970_i2c_write_block(g_chip, AK09970_REG_SWX1+3, vth, 4);
 		if (err < 0) {
 			TRI_KEY_LOG("%s: clear AK09970_REG_SWX1 fail %d \n", __func__, err);

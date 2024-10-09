@@ -244,7 +244,7 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(): call DPP_3DLUT, index: %#x.", __func__, lut_table_index);
+		IRIS_LOGD("%s(): call DPP_3DLUT, index: %#x.", __func__, lut_table_index);
 		break;
 
 	case DPP_PRE_LUT:
@@ -255,19 +255,19 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 		}
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(): call DPP_PRE_LUT, index: %#x.", __func__, lut_table_index);
+		IRIS_LOGD("%s(): call DPP_PRE_LUT, index: %#x.", __func__, lut_table_index);
 		break;
 
 	case DPP_DLV_LUT:
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call DPP_DLV_LUT, index: %#x.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call DPP_DLV_LUT, index: %#x.", __func__, lut_table_index);
 		break;
 
 	case SR_LUT:
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call SR_LUT, index: %#x.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call SR_LUT, index: %#x.", __func__, lut_table_index);
 	break;
 	case IOINC1D_LUT:
 	case IOINC1D_PP_LUT:
@@ -308,7 +308,7 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call FRC_PHASE_LUT, index: %d.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call FRC_PHASE_LUT, index: %d.", __func__, lut_table_index);
 		break;
 
 	case APP_CODE_LUT:
@@ -320,7 +320,7 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call APP_CODE_LUT, index: %d.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call APP_CODE_LUT, index: %d.", __func__, lut_table_index);
 		break;
 
 	case DPP_DITHER_LUT:
@@ -332,7 +332,7 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call DPP_DITHER_LUT, index: %d.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call DPP_DITHER_LUT, index: %d.", __func__, lut_table_index);
 		break;
 
 	case DTG_PHASE_LUT:
@@ -344,7 +344,7 @@ int iris_send_lut_i7p(u8 lut_type, u8 lut_table_index)
 
 		lut_opt_id = lut_table_index & 0xff;
 		iris_fomat_lut_cmds(lut_type, lut_opt_id);
-		IRIS_LOGI("%s(), call DTG_PHASE_LUT, index: %d.", __func__, lut_table_index);
+		IRIS_LOGD("%s(), call DTG_PHASE_LUT, index: %d.", __func__, lut_table_index);
 		break;
 
 	default:

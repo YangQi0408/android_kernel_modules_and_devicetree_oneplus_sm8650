@@ -61,7 +61,7 @@
 #define USB_TYPEC_NORMAL  (0)
 #define USB_TYPEC_REVERSE (1)
 
-#ifdef OPLUS_ARCH_EXTENDS
+#if !IS_ENABLED(CONFIG_OPLUS_MT6835_USE_FSA4480)
 // add for check and reset MT6338_TOP_INT_CON0 bit7 for headset can't be detected issue
 extern bool mt6338_accdet_irq_check_and_set(void);
 #endif /* OPLUS_ARCH_EXTENDS */
@@ -98,9 +98,34 @@ struct fsa4480_priv {
 	struct typec_mux *mux;
 	/* add end for DP */
 #ifdef OPLUS_ARCH_EXTENDS
+	bool hp_bypass;
+#endif /*OPLUS_ARCH_EXTENDS*/
+
+#ifdef OPLUS_ARCH_EXTENDS
 	struct delayed_work hp_work;
 #endif
 };
+
+#ifdef OPLUS_ARCH_EXTENDS
+int (*ptypec_ext_eint_handler)(bool plug_flag) = NULL;
+
+int typec_ext_eint_handler(bool plug_flag)
+{
+    if (ptypec_ext_eint_handler) {
+        ptypec_ext_eint_handler(plug_flag);
+        return 0;
+    } else {
+        pr_err("ext_eint_handler not register");
+        return -1;
+    }
+}
+
+void fsa4480_register_ext_eint_handler(int (*phandler)(bool plug_flag))
+{
+    ptypec_ext_eint_handler = phandler;
+}
+EXPORT_SYMBOL(fsa4480_register_ext_eint_handler);
+#endif
 
 struct fsa4480_reg_val {
 	u16 reg;
@@ -290,11 +315,18 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 			}
 
 		}
+#ifdef OPLUS_ARCH_EXTENDS
+		if (fsa_priv->hp_bypass) {
+			typec_ext_eint_handler(true);
+		} else {
+#endif /*OPLUS_ARCH_EXTENDS*/
 		if (gpio_is_valid(fsa_priv->hs_det_pin)) {
 			// Check the bit 7: audio irq enable
+			#if !IS_ENABLED(CONFIG_OPLUS_MT6835_USE_FSA4480)
 			if (!mt6338_accdet_irq_check_and_set()) {
 				dev_err(dev, "%s: MT6338_TOP_INT_CON0 bit7 is 0.\n", __func__);
 			}
+			#endif
 			usleep_range(2000, 2005);
 
 			dev_info(dev, "%s: set hs_det_pin to enable.\n", __func__);
@@ -305,14 +337,24 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 			gpio_direction_output(fsa_priv->hs_det_pin, fsa_priv->hs_det_level);
 			state = gpio_get_value(fsa_priv->hs_det_pin);
 			dev_info(dev, "%s: after hs_det_pin state = %d.\n", __func__, state);
+			}
+#ifdef OPLUS_ARCH_EXTENDS
 		}
+#endif /*OPLUS_ARCH_EXTENDS*/
 	} else {
 		pr_info("plugout regulator_get_voltage(%d)\n", regulator_get_voltage(vio28_reg));
+#ifdef OPLUS_ARCH_EXTENDS
+		if (fsa_priv->hp_bypass) {
+			typec_ext_eint_handler(false);
+		} else {
+#endif /*OPLUS_ARCH_EXTENDS*/
 		if (gpio_is_valid(fsa_priv->hs_det_pin)) {
 			// Check the bit 7: audio irq enable
+			#if !IS_ENABLED(CONFIG_OPLUS_MT6835_USE_FSA4480)
 			if (!mt6338_accdet_irq_check_and_set()) {
 				dev_err(dev, "%s: MT6338_TOP_INT_CON0 bit7 is 0.\n", __func__);
 			}
+			#endif
 			usleep_range(2000, 2005);
 
 			dev_info(dev, "%s: set hs_det_pin to disable.\n", __func__);
@@ -322,7 +364,9 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 			state = gpio_get_value(fsa_priv->hs_det_pin);
 			dev_info(dev, "%s: after hs_det_pin state = %d.\n", __func__, state);
 		}
-
+#ifdef OPLUS_ARCH_EXTENDS
+		}
+#endif /*OPLUS_ARCH_EXTENDS*/
 		if (fsa_priv->vendor == DIO4480) {
 			regmap_write(fsa_priv->regmap, FSA4480_RESET, 0x01);//reset DIO4480
 			usleep_range(1000, 1005);
@@ -543,6 +587,9 @@ static int fsa4480_parse_dt(struct fsa4480_priv *fsa_priv,
     int hs_det_level = 0;
     int state = 0;
     int sense_to_ground = 0;
+#ifdef OPLUS_ARCH_EXTENDS
+    int hp_bypass = 0;
+#endif
 
 //#ifdef OPLUS_ARCH_EXTENDS
     vio28_reg = regulator_get(dev, "fsa_audio");
@@ -570,6 +617,17 @@ static int fsa4480_parse_dt(struct fsa4480_priv *fsa_priv,
 		pr_info("%s: fsa_priv is NULL\n", __func__);
 		return -ENOMEM;
 	}
+
+#ifdef OPLUS_ARCH_EXTENDS
+	ret = of_property_read_u32(dNode,
+				"fsa4480,hp-bypass", &hp_bypass);
+	if (ret) {
+		fsa_priv->hp_bypass = false;
+	} else {
+		fsa_priv->hp_bypass = hp_bypass;
+	}
+	pr_info("%s: hp_bypass %d\n", __func__, hp_bypass);
+#endif /*OPLUS_ARCH_EXTENDS*/
 
 	fsa_priv->hs_det_pin = of_get_named_gpio(dNode,
 	        "fsa4480,hs-det-gpio", 0);

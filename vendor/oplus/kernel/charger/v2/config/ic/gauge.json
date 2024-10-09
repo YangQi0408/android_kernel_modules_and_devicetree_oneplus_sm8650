@@ -1927,7 +1927,56 @@
                     }
                 }
             }
+        },
+        {
+            "lable": "OPLUS_IC_FUNC_GAUGE_SET_LAST_CC",
+            "desc": {
+                "zh": "设置记录CC"
+            },
+            "auto_debug_code": false,
+            "parameter_list": ["int *"],
+            "parameter_desc": [
+                {
+                    "range": "0-*",
+                    "type": "in",
+                    "desc": {
+                        "zh": "记录CC"
+                    }
+                }
+            ],
+            "vict": {
+                "read": false,
+                "write": false,
+                "overwrite": false
+            }
+        },
+        {
+            "lable": "OPLUS_IC_FUNC_GAUGE_GET_LAST_CC",
+            "desc": {
+                "zh": "获取记录CC"
+            },
+            "auto_debug_code": true,
+            "parameter_list": ["int *"],
+            "parameter_desc": [
+                {
+                    "range": "0-*",
+                    "type": "out",
+                    "desc": {
+                        "zh": "获取记录CC"
+                    }
+                }
+            ],
+            "vict": {
+                "read": {
+                    "cmd": "vict -f {id} -G vic-*",
+                    "desc": {
+                        "zh": "N/A"
+                    }
+                },
+                "write": false,
+                "overwrite": false
+            }
         }
     ],
-    "version": "V2.2:63:54b36518488046001993d9e49627d82388a99990076d7d26a97d6c570c1ba891"
+    "version": "V5.0:65:a9af6084a4e6c3f1fa2cf8f738b76d39801fbaef066e7f944d08ee412f5449bb"
 }

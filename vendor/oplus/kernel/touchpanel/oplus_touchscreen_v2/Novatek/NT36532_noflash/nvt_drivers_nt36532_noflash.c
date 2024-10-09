@@ -2976,6 +2976,9 @@ static int nvt_enable_pen_mode(struct chip_data_nt36523 *chip_info, bool enable)
 		case TYPE_PENCIL_SUNWODA:
 			ret = nvt_extend_cmd_store(chip_info, EVENTBUFFER_EXT_CMD, EVENTBUFFER_EXT_PEN_MODE_4TH_ON);
 			break;
+		case TYPE_PENCIL_MAXEYE_3RD:
+			ret = nvt_extend_cmd_store(chip_info, EVENTBUFFER_EXT_CMD, EVENTBUFFER_EXT_PEN_MODE_5TH_ON);
+			break;
 		default:
 			ret = nvt_extend_cmd_store(chip_info, EVENTBUFFER_EXT_CMD, EVENTBUFFER_EXT_PEN_MODE_ON);
 			TPD_INFO("error pencil type not defined !!!\n");
@@ -3724,6 +3727,10 @@ static int32_t nvt_check_fw_status(struct chip_data_nt36523 *chip_info)
 
 	if (i >= retry) {
 		TPD_INFO("%s failed, i=%d, buf[1]=0x%02X\n", __func__, i, buf[1]);
+		if (buf[1] == 0XFE) {
+			nvt_sw_reset_idle(chip_info);
+		}
+		nvt_ts_read_history_log(chip_info);
 		return -1;
 
 	} else {

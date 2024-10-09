@@ -12,7 +12,9 @@
 #include <linux/pm_wakeirq.h>
 #include <linux/serial_8250.h>
 #include <linux/proc_fs.h>
+#include <linux/input/mt.h>
 #include "owb.h"
+#include <soc/oplus/dft/kernel_fb.h>
 
 #if IS_ENABLED(CONFIG_QCOM_PANEL_EVENT_NOTIFIER) && defined(CONFIG_OPLUS_POGOPIN_FUNCTION)
 #include <linux/soc/qcom/panel_event_notifier.h>
@@ -20,18 +22,22 @@
 #include <drm/drm_panel.h>
 #endif
 
+#define KB_SN_HIDE_BIT_START   7
+#define KB_SN_HIDE_BIT_END  19
+#define KB_SN_HIDE_STAR_ASCII  42
 struct pogo_keyboard_data *pogo_keyboard_client = NULL;
 static int test_type = 0;
 char TAG[60] = { 0 };
 
 //max numbers of interval for plug-out detection.
 //heartbeat interval from keyboard is 100ms.
-//keybaord initialization takes about 400ms and after that first heartbeat packet is reported.
+//keyboard initialization takes about 400ms and after that first heartbeat packet is reported.
 //that's to say during keyboard plug-in stage host will treat keyboard plug-out if host cannot receive heartbeat packet within 400ms.
 //but host only wait 200ms after keyboard attechment is finished.
 //note the host timer is 50ms.
-static int max_disconnect_count = 40;
-static int max_plug_in_disconnect_count = 8;
+static int max_disconnect_count = 10;
+static int max_plug_in_disconnect_count = 40;
+static int sn_report_count = 0;
 
 static DECLARE_WAIT_QUEUE_HEAD(waiter);
 static DECLARE_WAIT_QUEUE_HEAD(read_waiter);
@@ -40,7 +46,7 @@ static DECLARE_WAIT_QUEUE_HEAD(read_waiter);
 
 static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event);
 #ifdef CONFIG_PLUG_SUPPORT
-static irqreturn_t keybaord_core_plug_irq_handler(int irq, void *data);
+static irqreturn_t keyboard_core_plug_irq_handler(int irq, void *data);
 #endif
 static irqreturn_t pogo_keyboard_irq_handler(int irq, void *data);
 static struct file *pogo_keyboard_port_to_file(struct uart_port *port);
@@ -53,6 +59,8 @@ static int pogo_keyboard_plat_suspend(struct platform_device *device);
 static int pogo_keyboard_plat_resume(struct platform_device *device);
 static int pogo_keyboard_input_connect(void);
 static void pogo_keyboard_input_disconnect(void);
+static bool pogo_keyboard_key_up(void);
+static bool pogo_keyboard_touch_up(void);
 
 void pogo_keyboard_show_buf(void *buf, int count)
 {
@@ -92,12 +100,16 @@ void pogo_keyboard_info_buf(void *buf, int count)
 void pogo_keyboard_heartbeat_switch(int value)
 {
     ktime_t ktime = ktime_set(0, 1000 * 1000 * 50); //50ms, note that heartbeat from keyboard is 100ms(may be adjusted in the future)
+
+    if (pogo_keyboard_client == NULL) {
+        return;
+    }
+
     if (value == 1) {
-        if (pogo_keyboard_client)
-            hrtimer_start(&pogo_keyboard_client->heartbeat_timer, ktime, HRTIMER_MODE_REL);
+        pm_wakeup_event(&pogo_keyboard_client->plat_dev->dev, 50 + 20);
+        hrtimer_start(&pogo_keyboard_client->heartbeat_timer, ktime, HRTIMER_MODE_REL);
     } else if (value == 0) {
-        if (pogo_keyboard_client)
-            hrtimer_cancel(&pogo_keyboard_client->heartbeat_timer);
+        hrtimer_cancel(&pogo_keyboard_client->heartbeat_timer);
     }
 }
 
@@ -105,12 +117,16 @@ void pogo_keyboard_heartbeat_switch(int value)
 void pogo_keyboard_plug_switch(int value)
 {
     ktime_t ktime = ktime_set(0, 1000 * 1000 * 20); //20ms
+
+    if (pogo_keyboard_client == NULL || pogo_keyboard_client->plug_timer_one_time) {
+        return;
+    }
+
     if (value == 1) {
-        if (pogo_keyboard_client->file_client)
-            hrtimer_start(&pogo_keyboard_client->plug_timer, ktime, HRTIMER_MODE_REL);
+        pogo_keyboard_client->plug_timer_one_time = true;
+        hrtimer_start(&pogo_keyboard_client->plug_timer, ktime, HRTIMER_MODE_REL);
     } else if (value == 0) {
-        if (pogo_keyboard_client->file_client)
-            hrtimer_cancel(&pogo_keyboard_client->plug_timer);
+        hrtimer_cancel(&pogo_keyboard_client->plug_timer);
     }
 }
 
@@ -250,11 +266,51 @@ int uart_unpack_data(char *buf, int len, unsigned char *out_buf, int *out_len)
     return 0;
 }
 
+static int upload_pogopin_kevent_data(unsigned char *payload)
+{
+    struct kernel_packet_info *user_msg_info;
+    char log_tag[] = KEVENT_LOG_TAG;
+    char event_id_pogopin[] = KEVENT_EVENT_ID;
+    int len;
+    int retry = 3;
+    int ret = 0;
+
+    user_msg_info = (struct kernel_packet_info *)kmalloc(
+			sizeof(char) * POGOPIN_TRIGGER_MSG_LEN, GFP_KERNEL);
+    if (!user_msg_info) {
+        kb_err("%s: Allocation failed\n", __func__);
+        return -ENOMEM;
+    }
+
+    memset(user_msg_info, 0, POGOPIN_TRIGGER_MSG_LEN);
+    strncpy(user_msg_info->payload, payload, MAX_POGOPIN_PAYLOAD_LEN);
+    user_msg_info->payload[MAX_POGOPIN_PAYLOAD_LEN - 1] = '\0';
+    len = strlen(user_msg_info->payload);
+
+    user_msg_info->type = 1;
+    strncpy(user_msg_info->log_tag, log_tag, MAX_POGOPIN_EVENT_TAG_LEN);
+    user_msg_info->log_tag[MAX_POGOPIN_EVENT_TAG_LEN - 1] = '\0';
+    strncpy(user_msg_info->event_id, event_id_pogopin, MAX_POGOPIN_EVENT_ID_LEN);
+    user_msg_info->event_id[MAX_POGOPIN_EVENT_ID_LEN - 1] = '\0';
+    user_msg_info->payload_length = len + 1;
+
+    do {
+        ret = fb_kevent_send_to_user(user_msg_info);
+        if (!ret)
+            break;
+        msleep(10);
+    } while (retry --);
+
+    kfree(user_msg_info);
+    return ret;
+}
 // handle uart received data. NOTE: called by uart rx interrupt handler.
 static int pogo_keyboard_mod_data_process(char *buf, int len)
 {
     int   value = buf[0];
-    struct input_dev *input_dev = NULL;
+    int i;
+    int ret;
+
     pogo_keyboard_client->disconnect_count = 0;
     switch (value) {
         case ONE_WIRE_BUS_PACKET_GENRRAL_KEY_CMD:
@@ -270,7 +326,7 @@ static int pogo_keyboard_mod_data_process(char *buf, int len)
             touchpad_input_report(&buf[1]);
             break;
         case ONE_WIRE_BUS_PACKET_SYNC_UPLOAD_CMD:
-            kb_debug("%s %d SYNC status:%2x\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status);
+            // kb_debug("%s %d SYNC status:%2x\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status);
             // packet format: 0x2F + 0x04(len=4) + 1-byte sub-cmd + 3-byte data.
             if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0) {
                 //获取MAC地址及品牌标志
@@ -306,17 +362,33 @@ static int pogo_keyboard_mod_data_process(char *buf, int len)
                     }
                     pogo_keyboard_client->pogo_keyboard_status &= ~KEYBOARD_CONNECT_STATUS;
                     pogo_keyboard_client->plug_in_count = 0;
-                    kb_info("%s %d plug in\n", __func__, __LINE__);
+                    kb_info("%s %d quick plug out and quick plug in\n", __func__, __LINE__);
                     pogo_keyboard_event_send(KEYBOARD_PLUG_IN_EVENT);
-                } else if (buf[2] == 0x05 && buf[3] == 0x02 && (buf[4] & 0x01) != ((pogo_keyboard_client->pogo_keyboard_status >> 2) & 0x01)) { //by heartbeet data sync capslock status
-                    //sync capslock led status if status reported from keyboard differs from host.
-                    //note definition: KEYBOARD_CAPSLOCK_ON_STATUS  (1<<2)
-                    kb_info("%s %d sync capslock:%02x\n", __func__, __LINE__, buf[5]);
-                    if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_LCD_ON_STATUS) != 0) {//send led cmd to kb only if lcd is on.
-                        if (((pogo_keyboard_client->pogo_keyboard_status >> 2) & 0x01) == 0x01)
-                            pogo_keyboard_event_send(KEYBOARD_CAPSLOCK_ON_EVENT);
-                        else
-                            pogo_keyboard_event_send(KEYBOARD_CAPSLOCK_OFF_EVENT);
+                } else if (buf[2] == 0x05 && buf[3] == 0x02) {
+                    if ((buf[1] > 10) && (pogo_keyboard_client->pogo_report_touch_status == 1)) {
+                        pogo_keyboard_client->pogo_report_touch_status = 0;
+                        pogo_keyboard_client->touchpad_disable_state = buf[12];
+                        pogo_keyboard_event_send(KEYBOARD_REPORT_TOUCH_STATUS_EVENT);
+                    }
+                    if ((buf[4] & 0x01) != ((pogo_keyboard_client->pogo_keyboard_status >> 2) & 0x01)) { //by heartbeet data sync capslock status
+                        //sync capslock led status if status reported from keyboard differs from host.
+                        //note definition: KEYBOARD_CAPSLOCK_ON_STATUS  (1<<2)
+                        kb_info("%s %d sync capslock:%02x\n", __func__, __LINE__, buf[5]);
+                        if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_LCD_ON_STATUS) != 0) {//send led cmd to kb only if lcd is on.
+                            if (((pogo_keyboard_client->pogo_keyboard_status >> 2) & 0x01) == 0x01)
+                                pogo_keyboard_event_send(KEYBOARD_CAPSLOCK_ON_EVENT);
+                            else
+                                pogo_keyboard_event_send(KEYBOARD_CAPSLOCK_OFF_EVENT);
+                        }
+                    }
+                    pogo_keyboard_touch_up();
+                }
+
+                if (buf[2] == 0x05 && (pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_LCD_ON_STATUS) == 0) {
+                    pogo_keyboard_client->sync_lcd_state_cnt++;
+                    if(pogo_keyboard_client->sync_lcd_state_cnt >= SYNC_LCD_STATE_CNT_MAX) {
+                        pogo_keyboard_client->sync_lcd_state_cnt = 0;
+                        pogo_keyboard_event_send(KEYBOARD_HOST_LCD_OFF_EVENT);
                     }
                 }
             }
@@ -339,21 +411,22 @@ static int pogo_keyboard_mod_data_process(char *buf, int len)
                 }
             }
 
-            if (value == ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD && buf[2] == 0x03) {
-                // got keyboard enable/disable report.
-                //packet format: 3B 03 03 01 00(DISABLE)/01(ENABLE)
-                input_dev = pogo_keyboard_client->input_wakeup;
-                if (buf[4] == 0x01) {
-                    input_report_key(input_dev, KEY_KB_ENABLE, 1);
-                    input_sync(input_dev);
-                    input_report_key(input_dev, KEY_KB_ENABLE, 0);
-                    input_sync(input_dev);
-                } else if (buf[4] == 0x00) {
-                    input_report_key(input_dev, KEY_KB_DISABLE, 1);
-                    input_sync(input_dev);
-                    input_report_key(input_dev, KEY_KB_DISABLE, 0);
-                    input_sync(input_dev);
+            if (value == ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD && buf[2] == 0x0e) {
+                kb_info("keyboard batt level:%d charge:%d state:0x%x\n", buf[4], (buf[5] >> 4) & 0x03, buf[5]);
+                pogo_keyboard_client->pogo_battery_power_level = (u8)buf[4];
+            } else if(value == ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD && buf[2] == 0x0b) {
+                buf[buf[3] + 4] = 0;
+                ret = memcmp(pogo_keyboard_client->report_sn, &buf[4], DEFAULT_SN_LEN);
+                if (ret == 0 && sn_report_count >= 2) {
+                    kb_info("%s:same keyboard SN ,not report\n", __func__);
+                    break;
+                } else if(ret != 0) {
+                    sn_report_count = 0;
                 }
+                for ( i = 0; i < DEFAULT_SN_LEN; i++) {
+                    pogo_keyboard_client->report_sn[i] = buf[4 + i];
+                }
+                pogo_keyboard_event_send(KEYBOARD_REPORT_SN_EVENT);
             }
             break;
         default:
@@ -441,32 +514,31 @@ int pogo_keyboard_recv(char *buf, int len)
                 recv_start_flag = false;
                 recv_decode_flag = true;
                 recv_decode_cnt++;
-                if(recv_decode_cnt > 2) {
+                if(recv_decode_cnt > 3) {
                     break;
                 }
             }
         }
         if (rec_temp_buf_index >= UART_BUFFER_SIZE)
             rec_temp_buf_index = 0;
-    }
 
-    if (recv_decode_flag == true) {
-        recv_decode_flag = false;
-        if (pogo_keyboard_data_is_valid(recv_buf, rec_temp_buf_index)) {
-            uart_unpack_data(recv_buf, rec_temp_buf_index, data_buf, &out_len);
-            sprintf(TAG, "%s  %d recv ", __func__, __LINE__);
-            pogo_keyboard_info_buf(data_buf, out_len);
-            pogo_keyboard_store_recv_data(data_buf, out_len);
+        if (recv_decode_flag == true) {
+            recv_decode_flag = false;
+            if (pogo_keyboard_data_is_valid(recv_buf, rec_temp_buf_index)) {
+                uart_unpack_data(recv_buf, rec_temp_buf_index, data_buf, &out_len);
+                // sprintf(TAG, "%s  %d recv ", __func__, __LINE__);
+                // pogo_keyboard_info_buf(data_buf, out_len);
+                pogo_keyboard_store_recv_data(data_buf, out_len);
 
-            ret = pogo_keyboard_mod_data_process(data_buf, out_len);
-            if (ret) {
-                kb_err("%s %d pogo_keyboard_mod_data_process fail: %d\r\n", __func__, __LINE__, ret);
+                ret = pogo_keyboard_mod_data_process(data_buf, out_len);
+                if (ret) {
+                    kb_err("%s %d pogo_keyboard_mod_data_process fail: %d\r\n", __func__, __LINE__, ret);
+                }
+
             }
-
+            rec_temp_buf_index = 0;
         }
-        rec_temp_buf_index = 0;
     }
-
     return ret;
 
 }
@@ -644,7 +716,7 @@ int  pogo_keyboard_tp_ver(void)
     return 0;
 }
 
-//read keybaord version.
+//read keyboard version.
 int  pogo_keyboard_ver(void)
 {
 
@@ -709,6 +781,35 @@ void pogo_keyboard_test(void)
 }
 #endif//CONFIG_KB_DEBUG_FS
 
+int pogo_keyboard_get_charge_current(void)
+{
+    char info_reg[] = {ONE_WIRE_BUS_PACKET_USER_GENERAL_CMD, 0x03, 0x09, 0x01, 0x01};
+    char buf[] = {ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD, 0x06, 0x09, 0x04};
+    char temp[128] = {0};
+    int read_len = 0;
+    int count = 3;
+    int ret = 0, i = 0;
+    int charge_current = -1;
+
+    for (i = 0; i < count; i++) {
+        ret = pogo_keyboard_write_and_read(info_reg, sizeof(info_reg), temp, &read_len);
+        if (ret < 0) {
+            kb_err("%s %d err:ret:%d \n", __func__, __LINE__, ret);
+            continue;
+        }
+        if (memcmp(temp, buf, sizeof(buf)) == 0) {
+            break;
+        }
+    }
+    if (i >= count) {
+        kb_err("%s %d err:ret:%d \n", __func__, __LINE__, ret);
+        return charge_current;
+    }
+    charge_current = (temp[7] << 8) + temp[6];
+    kb_debug("%s %d current=%dmA\n", __func__, __LINE__, charge_current);
+
+    return charge_current;
+}
 // output leds control cmd to keyboard.
 static int pogo_keyboard_set_led(char event)
 {
@@ -853,7 +954,7 @@ static int pogo_keyboard_set_lcd_state(bool state)
 {
     int ret = 0;
     char write_buf[] = { ONE_WIRE_BUS_PACKET_USER_GENERAL_CMD, 0x03, 0x02, 0x01, 0x01 };
-    char buf[] = { ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD, 0x04, 0x02, 0x02 };
+    char buf[] = { ONE_WIRE_BUS_PACKET_USER_GENERAL_ACK_CMD, 0x04, 0x02, 0x02, 0x01};
     char read_buf[255] = { 0 };
     int read_len = 0;
     int i = 0;
@@ -861,8 +962,10 @@ static int pogo_keyboard_set_lcd_state(bool state)
     kb_debug("%s %d state:%d\r\n", __func__, __LINE__, state);
     if (state) {
         write_buf[4] = 0x00;
+        buf[4] = 0x00;
     } else {
         write_buf[4] = 0x01;
+        buf[4] = 0x01;
     }
     for (i = 0; i < 3; i++) {
         ret = pogo_keyboard_write_and_read(write_buf, sizeof(write_buf), read_buf, &read_len);
@@ -883,10 +986,34 @@ static int pogo_keyboard_set_lcd_state(bool state)
 
     sprintf(TAG, "%s %d", __func__, __LINE__);
     pogo_keyboard_show_buf(read_buf, read_len);
-    pogo_keyboard_heartbeat_switch(state);
     kb_debug("%s %d ok ret:0x%02x status:%d\n", __func__, __LINE__, ret, read_buf[5]);
 
     return 0;
+}
+
+static void pogo_keyboard_get_sn(void)
+{
+    char sn_reg[] = {ONE_WIRE_BUS_PACKET_USER_GENERAL_CMD, 0x04, 0x0b, 0x02, 0x02, 0x14};
+    int count = 3;
+    int i = 0, ret = 0;
+
+    pm_stay_awake(&pogo_keyboard_client->plat_dev->dev);
+
+    for (i = 0; i < count; i++) {
+        ret = pogo_keyboard_write(sn_reg, sizeof(sn_reg));
+        if (ret < 0) {
+            kb_err("%s %d err:ret:%d \n", __func__, __LINE__, ret);
+            continue;
+        } else {
+            break;
+        }
+    }
+
+    if (i >= count) {
+        kb_err("%s %d send read_sn cmd err:ret:%d \n", __func__, __LINE__, ret);
+    }
+
+    pm_relax(&pogo_keyboard_client->plat_dev->dev);
 }
 
 void pogo_keyboard_led_report(int key_value)
@@ -1045,6 +1172,10 @@ static int pogo_keyboard_get_dts_info(struct platform_device *pdev)
         kb_err("%s %d read touchpad-xy-max err: %d\n", __func__, __LINE__, ret);
         return ret;
     }
+
+    pogo_keyboard_client->pogo_battery_support = of_property_read_bool(node, "pogopin-battery-support");
+    kb_info("%s %d pogo_keyboard_client->pogo_battery_support: %d\n", __func__, __LINE__, pogo_keyboard_client->pogo_battery_support);
+
     ret = of_property_read_u32_index(node, "touchpad-xy-max", 1, &pogo_keyboard_client->touchpad_y_max);
     if (ret) {
         kb_err("%s %d read touchpad-xy-max err: %d\n", __func__, __LINE__, ret);
@@ -1059,15 +1190,15 @@ static int pogo_keyboard_get_dts_info(struct platform_device *pdev)
     }
     kb_debug("%s %d plug_gpio:%d\n", __func__, __LINE__, pogo_keyboard_client->plug_gpio);
 
-    ret = gpio_request_one(pogo_keyboard_client->plug_gpio, GPIOF_DIR_IN, "keybaord_plug_gpio");
+    ret = gpio_request_one(pogo_keyboard_client->plug_gpio, GPIOF_DIR_IN, "keyboard_plug_gpio");
     if (ret) {
         kb_err("%s %d gpio_request_one err:%d\n", __func__, __LINE__, ret);
         return ret;
     }
 
     pogo_keyboard_client->plug_irq = gpio_to_irq(pogo_keyboard_client->plug_gpio);
-    ret = devm_request_threaded_irq(&device->dev, pogo_keyboard_client->plug_irq, keybaord_core_plug_irq_handler,
-        NULL, IRQF_TRIGGER_LOW | IRQF_ONESHOT, "keybaord_plug_irq", NULL);
+    ret = devm_request_threaded_irq(&device->dev, pogo_keyboard_client->plug_irq, keyboard_core_plug_irq_handler,
+        NULL, IRQF_TRIGGER_LOW | IRQF_ONESHOT, "keyboard_plug_irq", NULL);
     if (ret < 0) {
         kb_err("request irq failed : %d\n", pogo_keyboard_client->plug_irq);
         return -EINVAL;
@@ -1136,18 +1267,20 @@ static int pogo_keyboard_get_dts_info(struct platform_device *pdev)
         kb_err("%s %d gpio_request_one err:%d\n", __func__, __LINE__, ret);
         return ret;
     }
+
     pogo_keyboard_client->uart_wake_gpio_irq = gpio_to_irq(pogo_keyboard_client->uart_wake_gpio);
     device_init_wakeup(&pogo_keyboard_client->plat_dev->dev, true);
-    dev_pm_set_wake_irq(&pogo_keyboard_client->plat_dev->dev, pogo_keyboard_client->uart_wake_gpio_irq);
-
+    ret = dev_pm_set_wake_irq(&pogo_keyboard_client->plat_dev->dev, pogo_keyboard_client->uart_wake_gpio_irq);
+    if (ret) {
+        kb_err("dev_pm_set_wake_irq failed : %d\n", pogo_keyboard_client->uart_wake_gpio_irq);
+        return ret;
+    }
     ret = devm_request_threaded_irq(&device->dev, pogo_keyboard_client->uart_wake_gpio_irq, NULL,
-        pogo_keyboard_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "keybaord_wake_irq", NULL);
+        pogo_keyboard_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "keyboard_wake_irq", NULL);
     if (ret < 0) {
         kb_err("request irq failed : %d\n", pogo_keyboard_client->uart_wake_gpio_irq);
         return -EINVAL;
     }
-
-    enable_irq_wake(pogo_keyboard_client->uart_wake_gpio_irq);
     kb_debug("%s %d  uart_wake_gpio_irq \n", __func__, __LINE__);
 
 
@@ -1264,8 +1397,9 @@ static void pogo_keyboard_power_enable(int value)
 static irqreturn_t pogo_keyboard_irq_handler(int irq, void *data)
 {
     int value;
+
     // process only when keyboard is not connected.
-    if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0 && pogo_keyboard_client->file_client != NULL) {
+    if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0) {
         /*low level:plug in irq handler*/
 
         kb_debug("%s %d\n", __func__, __LINE__);
@@ -1568,10 +1702,22 @@ static void pogo_keyboard_input_disconnect(void)
     return;
 }
 
-static bool pogo_keyboard_key_and_touch_up(void)
+static void pogo_keyboard_report_toggle_key(void)
+{
+    if (!pogo_keyboard_client || !pogo_keyboard_client->input_pogo_keyboard)
+        return;
+    kb_debug("%s %d \n", __func__, __LINE__);
+    input_report_key(pogo_keyboard_client->input_pogo_keyboard, KEY_TOUCHPAD_TOGGLE, 1);
+    input_sync(pogo_keyboard_client->input_pogo_keyboard);
+    mdelay(10);
+    input_report_key(pogo_keyboard_client->input_pogo_keyboard, KEY_TOUCHPAD_TOGGLE, 0);
+    input_sync(pogo_keyboard_client->input_pogo_keyboard);
+}
+
+static bool pogo_keyboard_key_up(void)
 {
     bool ret = false;
-    if (!pogo_keyboard_client || !pogo_keyboard_client->input_pogo_keyboard || !pogo_keyboard_client->input_touchpad)
+    if (!pogo_keyboard_client || !pogo_keyboard_client->input_pogo_keyboard)
         return ret;
 
     if (pogo_keyboard_client->is_down) {
@@ -1590,7 +1736,27 @@ static bool pogo_keyboard_key_and_touch_up(void)
         kb_debug("%s %d key mmcode %d up\n", __func__, __LINE__, pogo_keyboard_client->down_mmcode);
         ret = true;
     }
+    return ret;
+}
+
+static bool pogo_keyboard_touch_up(void)
+{
+    bool ret = false;
+    int i = 0;
+    if (!pogo_keyboard_client || !pogo_keyboard_client->input_touchpad)
+        return ret;
+
     if (pogo_keyboard_client->touch_down) { //finger all up
+        kb_debug("%s %d touch_down %d\n", __func__, __LINE__, pogo_keyboard_client->touch_down);
+        input_mt_report_slot_state(pogo_keyboard_client->input_touchpad, MT_TOOL_FINGER, false);
+        input_report_key(pogo_keyboard_client->input_touchpad, BTN_TOOL_FINGER, 0);
+        for (i = 0; i < TOUCH_FINGER_MAX; i++) {
+            if (BIT(i) & pogo_keyboard_client->touch_down) {
+                input_mt_slot(pogo_keyboard_client->input_touchpad, i);
+                input_mt_report_slot_state(pogo_keyboard_client->input_touchpad, MT_TOOL_FINGER, false);
+                kb_debug("%s %d finger up id:%d\n", __func__, __LINE__, i);
+            }
+        }
         input_report_key(pogo_keyboard_client->input_touchpad, BTN_TOUCH, 0);
         input_sync(pogo_keyboard_client->input_touchpad);
         pogo_keyboard_client->touch_temp = 0;
@@ -1626,24 +1792,31 @@ static void pogo_keyboard_connect_send_uevent(void)
 static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
 {
     int ret = 0;
+    int i = 0;
+    int index = 0;
+    char report[MAX_POGOPIN_PAYLOAD_LEN];
+
     kb_debug("%s %d pogo_keyboard_event:%d  pogo_keyboard_status:0x%02x\n", __func__, __LINE__, pogo_keyboard_event, pogo_keyboard_client->pogo_keyboard_status);
     switch (pogo_keyboard_event) {
         case KEYBOARD_PLUG_IN_EVENT:
             if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0 &&
                 atomic_read(&pogo_keyboard_client->vcc_on)) {
                 pogo_keyboard_client->pogo_keyboard_status |= KEYBOARD_CONNECT_STATUS;
-#ifdef CONFIG_POWER_CTRL_SUPPORT
-                // pogo_keyboard_power_enable(1);
-#endif
+
                 ret = pogo_keyboard_input_connect();
                 if (ret) {
                     kb_err("%s %d pogo_keyboard_input_connect err!\n", __func__, __LINE__);
                     //break;
+                } else {
+                    pogo_keyboard_key_up();
+                    pogo_keyboard_touch_up();
                 }
 
                 pogo_keyboard_heartbeat_switch(1);
                 pogo_keyboard_connect_send_uevent();
                 pogo_keyboard_client->poweroff_timer_check_count = 0;
+                pogo_keyboard_client->sync_lcd_state_cnt = 0;
+                pogo_keyboard_get_sn();
             }
             break;
         case KEYBOARD_PLUG_OUT_EVENT:
@@ -1653,7 +1826,8 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
                 // pogo_keyboard_power_enable(0);
 #endif
                 kb_debug("%s %d \n", __func__, __LINE__);
-                if (pogo_keyboard_key_and_touch_up())
+                ret = pogo_keyboard_key_up();
+                if (pogo_keyboard_touch_up() || ret)
                     mdelay(10);
                 pogo_keyboard_input_disconnect();
                 pogo_keyboard_client->pogo_keyboard_status &= ~KEYBOARD_CONNECT_STATUS;
@@ -1664,19 +1838,19 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
 
             break;
 
-
         case KEYBOARD_HOST_LCD_ON_EVENT:
             pogo_keyboard_client->pogo_keyboard_status |= KEYBOARD_LCD_ON_STATUS;
+            pogo_keyboard_client->pogo_report_touch_status = 1;
             if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) != 0) {
 
                 ret = pogo_keyboard_set_lcd_state(true);
                 if (ret) {
                     kb_err("%s %d pogo_keyboard_set_lcd_state err!\n", __func__, __LINE__);
                 }
-                pogo_keyboard_set_led(pogo_keyboard_event);
             }
-            pogo_keyboard_heartbeat_switch(1);
-            (void)pogo_keyboard_key_and_touch_up();
+            pogo_keyboard_heartbeat_switch(true);
+            pogo_keyboard_key_up();
+            pogo_keyboard_touch_up();
             break;
 
         case KEYBOARD_HOST_LCD_OFF_EVENT:
@@ -1685,8 +1859,10 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
                 if (ret) {
                     kb_err("%s %d pogo_keyboard_set_lcd_state err!\n", __func__, __LINE__);
                 }
+                pogo_keyboard_heartbeat_switch(false);
             }
             pogo_keyboard_client->pogo_keyboard_status &= ~KEYBOARD_LCD_ON_STATUS;
+            pogo_keyboard_client->sync_lcd_state_cnt = 0;
             break;
 
         case KEYBOARD_CAPSLOCK_ON_EVENT:
@@ -1712,6 +1888,8 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
 #ifdef CONFIG_POWER_CTRL_SUPPORT
                 pogo_keyboard_power_enable(1);
 #endif
+                pogo_keyboard_client->disconnect_count = 0;
+                pogo_keyboard_client->plug_in_count = 0;
             }
             break;
         case KEYBOARD_POWER_OFF_EVENT:
@@ -1747,7 +1925,26 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
 #endif
             }
             break;
+        case KEYBOARD_REPORT_SN_EVENT:
+            memset(report, 0, sizeof(report));
+            index += snprintf(&report[index], MAX_POGOPIN_PAYLOAD_LEN - index, "$$sn@@");
+            for ( i = 0; i < DEFAULT_SN_LEN; i++) {
+                index += snprintf(&report[index], MAX_POGOPIN_PAYLOAD_LEN - index, "%c", pogo_keyboard_client->report_sn[i]);
+            }
 
+            kb_info("%s: keyboard sn:%s\n", __func__, report);
+            for(i = KB_SN_HIDE_BIT_START; i < KB_SN_HIDE_BIT_END; i++)
+                report[i] = KB_SN_HIDE_STAR_ASCII;
+
+            ret = upload_pogopin_kevent_data(report);
+            if (ret)
+                kb_err("%s:pogopin report sn err\n", __func__);
+            if (sn_report_count < 2)
+                sn_report_count ++;
+            break;
+        case KEYBOARD_REPORT_TOUCH_STATUS_EVENT:
+            pogo_keyboard_report_toggle_key();
+            break;
         case KEYBOARD_TEST_EVENT:
             pogo_keyboard_test(); //for test
             break;
@@ -1762,7 +1959,7 @@ static int pogo_keyboard_event_process(unsigned char pogo_keyboard_event)
 }
 
 #ifdef CONFIG_PLUG_SUPPORT
-static irqreturn_t keybaord_core_plug_irq_handler(int irq, void *data)
+static irqreturn_t keyboard_core_plug_irq_handler(int irq, void *data)
 {
     int value = 0;
     value = gpio_get_value(pogo_keyboard_client->plug_gpio);
@@ -1813,12 +2010,8 @@ static int pogo_keyboard_event_handler(void *unused)
 int pogo_keyboard_write_callback(void *param, int enable)
 {
     if (enable == 1) {
-        if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_LCD_ON_STATUS) != 0) {//send cmd to kb only if lcd is on.
-            pogo_keyboard_enable_uart_tx(1);
-            kb_debug("%s %d write start\n", __func__, __LINE__);
-        } else {
-            kb_info("%s %d no do 0x%02x\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status);
-        }
+        pogo_keyboard_enable_uart_tx(1);
+        kb_debug("%s %d write start\n", __func__, __LINE__);
     } else if (enable == 0) {
         pogo_keyboard_enable_uart_tx(0);
         kb_debug("%s %d write end\n", __func__, __LINE__);
@@ -1840,11 +2033,9 @@ struct file *pogo_keyboard_port_to_file(struct uart_port *port)
     list_for_each_entry(priv, &tty->tty_files, list)
     {
         if (priv != NULL) {
-            filp = priv->file;
-            kb_debug("%s %d  %p major:%d minor:%d", __func__, __LINE__, filp, imajor(filp->f_inode), iminor(filp->f_inode));
             if (!strncmp(port->name, pogo_keyboard_client->tty_name, strlen(pogo_keyboard_client->tty_name))) {
-                kb_debug("%s %d  %p found", __func__, __LINE__, filp);
-                break;
+                filp = priv->file;
+                // kb_debug("%s %d  %p found", __func__, __LINE__, filp);
             }
         }
     }
@@ -1856,7 +2047,7 @@ struct file *pogo_keyboard_port_to_file(struct uart_port *port)
 int pogo_keyboard_init_callback(void *port, int type)
 {
     struct file *filp;
-    kb_debug("%s %d %d\n", __func__, __LINE__, type);
+
     if (!port)
         return -1;
     if (type == 1) {
@@ -1865,15 +2056,11 @@ int pogo_keyboard_init_callback(void *port, int type)
         if (pogo_keyboard_client->file_client == NULL && filp != NULL) {
             pogo_keyboard_client->file_client = filp;
             pogo_keyboard_plug_switch(1);
-            kb_info("%s %d  init ok\n", __func__, __LINE__);
+            // kb_info("%s %d  init ok\n", __func__, __LINE__);
         }
         kb_debug("%s %d  start %p\n", __func__, __LINE__, pogo_keyboard_client->file_client);
     } else if (type == 0) {
-        filp = pogo_keyboard_port_to_file(pogo_keyboard_client->port);
-        if (pogo_keyboard_client->file_client != NULL && pogo_keyboard_client->file_client == filp) {
-            pogo_keyboard_client->file_client = NULL;
-            kb_err("%s %d  init err\n", __func__, __LINE__);
-        }
+        pogo_keyboard_client->file_client = NULL;
         pogo_keyboard_client->port = NULL;
         kb_debug("%s %d  end\n", __func__, __LINE__);
     } else {
@@ -2058,7 +2245,7 @@ static void pogo_keyboard_unregister_callback(void)
 }
 
 // timer for first keyboard attachment detection after system init. run only once.
-static enum hrtimer_restart keybaord_core_plug_hrtimer(struct hrtimer *timer)
+static enum hrtimer_restart keyboard_core_plug_hrtimer(struct hrtimer *timer)
 {
     int value = 0;
 
@@ -2086,15 +2273,15 @@ static enum hrtimer_restart keybaord_core_plug_hrtimer(struct hrtimer *timer)
 }
 
 // timer for monitoring keyboard heartbeat report periodically.
-static enum hrtimer_restart keybaord_core_heartbeat_hrtimer(struct hrtimer *timer)
+static enum hrtimer_restart keyboard_core_heartbeat_hrtimer(struct hrtimer *timer)
 {
-    kb_debug("disconnect_count = %d max_disconnect_count = %d max_plug_in_disconnect_count = %d\n",
-        pogo_keyboard_client->disconnect_count, max_disconnect_count, max_plug_in_disconnect_count);
+    // kb_debug("disconnect_count = %d max_disconnect_count = %d max_plug_in_disconnect_count = %d\n",
+    //     pogo_keyboard_client->disconnect_count, max_disconnect_count, max_plug_in_disconnect_count);
 
     if (pogo_keyboard_client->disconnect_count >= max_disconnect_count && pogo_keyboard_client->plug_in_count >= max_plug_in_disconnect_count) {
         if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) || atomic_read(&pogo_keyboard_client->vcc_on)) {
             atomic_set(&pogo_keyboard_client->vcc_on, 0);
-            kb_info("%s %d plug out for disconnect_count = %d\r\n", __func__, __LINE__, pogo_keyboard_client->disconnect_count);
+            kb_info("%s %d plug out for disconnect_count = %d\n", __func__, __LINE__, pogo_keyboard_client->disconnect_count);
             pogo_keyboard_event_send(KEYBOARD_POWER_OFF_EVENT);
         }
         pogo_keyboard_client->disconnect_count = 0;
@@ -2102,7 +2289,6 @@ static enum hrtimer_restart keybaord_core_heartbeat_hrtimer(struct hrtimer *time
     } else {
         pogo_keyboard_client->disconnect_count++;
         if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) || atomic_read(&pogo_keyboard_client->vcc_on)) {
-            // kb_debug("keyboard is connected");
             pogo_keyboard_heartbeat_switch(1); // restart the timer.
         }
     }
@@ -2113,11 +2299,9 @@ static enum hrtimer_restart keybaord_core_heartbeat_hrtimer(struct hrtimer *time
     return HRTIMER_NORESTART;
 }
 
-static enum hrtimer_restart keybaord_core_poweroff_hrtimer(struct hrtimer *timer)
+static enum hrtimer_restart keyboard_core_poweroff_hrtimer(struct hrtimer *timer)
 {
     int value = 0;
-
-    kb_debug("%s %d\n", __func__, __LINE__);
 
     value = gpio_get_value(pogo_keyboard_client->uart_wake_gpio);
     if (value == 0) {
@@ -2136,7 +2320,7 @@ static enum hrtimer_restart keybaord_core_poweroff_hrtimer(struct hrtimer *timer
 
     if (pogo_keyboard_client->poweroff_connect_count >= POWEROFF_CONNECT_MAX) {
         kb_info("%s %d power on! %d %d\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status, atomic_read(&pogo_keyboard_client->vcc_on));
-        if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0 && pogo_keyboard_client->file_client != NULL) {
+        if ((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0) {
             if (!atomic_read(&pogo_keyboard_client->vcc_on)) {
                 atomic_set(&pogo_keyboard_client->vcc_on, 1);
                 pogo_keyboard_event_send(KEYBOARD_POWER_ON_EVENT);// signal main event task to do the following attachement procedure.
@@ -2150,7 +2334,7 @@ static enum hrtimer_restart keybaord_core_poweroff_hrtimer(struct hrtimer *timer
     return HRTIMER_NORESTART;
 }
 
-static enum hrtimer_restart keybaord_core_plugin_check_hrtimer(struct hrtimer *timer)
+static enum hrtimer_restart keyboard_core_plugin_check_hrtimer(struct hrtimer *timer)
 {
     int value = 0;
 
@@ -2179,7 +2363,7 @@ static enum hrtimer_restart keybaord_core_plugin_check_hrtimer(struct hrtimer *t
 
     if(pogo_keyboard_client->check_connect_count >= PLUGIN_CHECK_CHECK_MAX) {
         kb_info("%s %d power on! %d %d\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status, atomic_read(&pogo_keyboard_client->vcc_on));
-        if((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0 && pogo_keyboard_client->file_client != NULL){
+        if((pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS) == 0){
             if (!atomic_read(&pogo_keyboard_client->vcc_on)){
                 atomic_set(&pogo_keyboard_client->vcc_on, 1);
                 pogo_keyboard_event_send(KEYBOARD_POWER_ON_EVENT);// signal main event task to do the following attachement procedure.
@@ -2199,16 +2383,16 @@ static int pogo_keyboard_start_up_init(void)
     kb_debug("%s %d pogo_keyboard_status:0x%02x\n", __func__, __LINE__, pogo_keyboard_client->pogo_keyboard_status);
     atomic_set(&pogo_keyboard_client->vcc_on, 0);
     hrtimer_init(&pogo_keyboard_client->plug_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    pogo_keyboard_client->plug_timer.function = keybaord_core_plug_hrtimer;
+    pogo_keyboard_client->plug_timer.function = keyboard_core_plug_hrtimer;
 
     hrtimer_init(&pogo_keyboard_client->heartbeat_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    pogo_keyboard_client->heartbeat_timer.function = keybaord_core_heartbeat_hrtimer;
+    pogo_keyboard_client->heartbeat_timer.function = keyboard_core_heartbeat_hrtimer;
 
     hrtimer_init(&pogo_keyboard_client->poweroff_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    pogo_keyboard_client->poweroff_timer.function = keybaord_core_poweroff_hrtimer;
+    pogo_keyboard_client->poweroff_timer.function = keyboard_core_poweroff_hrtimer;
 
     hrtimer_init(&pogo_keyboard_client->plugin_check_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    pogo_keyboard_client->plugin_check_timer.function = keybaord_core_plugin_check_hrtimer;
+    pogo_keyboard_client->plugin_check_timer.function = keyboard_core_plugin_check_hrtimer;
 
     return 0;
 }
@@ -2246,6 +2430,47 @@ static ssize_t proc_touchpad_state_read(struct file *file, char __user *user_buf
     return ret;
 }
 
+static ssize_t proc_battery_power_level_read(struct file *file, char __user *user_buf,
+    size_t count, loff_t *ppos)
+{
+    int ret = 0;
+    char buf[8] = {0};
+    kb_debug("%s, %d\n", __func__, __LINE__);
+    if (pogo_keyboard_client && (pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS)) {
+        snprintf(buf, sizeof(buf), "%u", pogo_keyboard_client->pogo_battery_power_level);
+        ret = simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));
+    }
+    return ret;
+}
+
+static ssize_t proc_battery_charge_current_read(struct file *file, char __user *user_buf,
+    size_t count, loff_t *ppos)
+{
+    int ret = 0;
+    int pogo_battery_charge_current = 0;
+    char buf[8] = {0};
+
+    if (pogo_keyboard_client && (pogo_keyboard_client->pogo_keyboard_status & KEYBOARD_CONNECT_STATUS)) {
+        pogo_battery_charge_current = pogo_keyboard_get_charge_current();
+        if (pogo_battery_charge_current < 0)
+             kb_err("%s, send cmd to keyboard to read charge current fail\n", __func__);
+    }
+    snprintf(buf, sizeof(buf), "%d", pogo_battery_charge_current);
+    ret = simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));
+
+    return ret;
+}
+
+static const struct proc_ops proc_battery_power_level_ops = {
+    .proc_read = proc_battery_power_level_read,
+    .proc_open = simple_open,
+    .proc_lseek = default_llseek,
+};
+static const struct proc_ops proc_battery_charge_current_ops = {
+    .proc_read = proc_battery_charge_current_read,
+    .proc_open = simple_open,
+    .proc_lseek = default_llseek,
+};
 static const struct proc_ops proc_touchpad_state_ops = {
     .proc_read = proc_touchpad_state_read,
     .proc_open = simple_open,
@@ -2275,6 +2500,18 @@ static int pogo_keyboard_init_proc(void)
     if (prEntry_tmp == NULL) {
         kb_err("%s %d couldn't create proc entry\n", __func__, __LINE__);
         ret = -ENOMEM;
+    }
+    if (pogo_keyboard_client->pogo_battery_support) {
+        prEntry_tmp = proc_create("kbd_battery_power_level", 0444, prEntry_keyboard, &proc_battery_power_level_ops);
+        if (prEntry_tmp == NULL) {
+            kb_err("%s %d couldn't create proc entry:kbd_battery_power_level\n", __func__, __LINE__);
+            ret = -ENOMEM;
+        }
+        prEntry_tmp = proc_create("kbd_battery_charge_current", 0444, prEntry_keyboard, &proc_battery_charge_current_ops);
+        if (prEntry_tmp == NULL) {
+            kb_err("%s %d couldn't create proc entry:kbd_battery_charge_current\n", __func__, __LINE__);
+            ret = -ENOMEM;
+        }
     }
 
     return ret;

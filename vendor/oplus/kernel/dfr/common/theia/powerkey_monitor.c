@@ -308,6 +308,7 @@ static ssize_t theia_powerkey_report_proc_write(struct file *file,
 		return count;
 	}
 
+	buffer[STAGE_BRIEF_SIZE - 1] = '\0';
 	record_stage(buffer);
 	return count;
 }

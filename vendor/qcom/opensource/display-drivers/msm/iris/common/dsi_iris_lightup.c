@@ -3552,7 +3552,7 @@ int iris_lightup(struct dsi_panel *panel)
 	_iris_read_power_mode(panel);
 #endif
 	pcfg->abyp_ctrl.preloaded = true;
-	IRIS_LOGI("%s(), end +++", __func__);
+	IRIS_LOGD("%s(), end +++", __func__);
 
 	return 0;
 }

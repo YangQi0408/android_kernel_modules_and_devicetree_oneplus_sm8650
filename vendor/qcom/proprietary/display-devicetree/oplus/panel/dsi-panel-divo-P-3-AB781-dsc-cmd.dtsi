@@ -911,9 +911,9 @@
 				qcom,mdss-dsi-pwm-switch-low-restore-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-high-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-low-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-pwm-switch-1to3-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-hbm-max-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-hbm-exit-max-command-state = "dsi_hs_mode";
 
@@ -1784,9 +1784,9 @@
 				qcom,mdss-dsi-pwm-switch-low-restore-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-high-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-low-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-pwm-switch-1to3-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-hbm-max-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-hbm-exit-max-command-state = "dsi_hs_mode";
 
@@ -2678,9 +2678,9 @@
 				qcom,mdss-dsi-pwm-switch-low-restore-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-high-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-low-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-pwm-switch-1to3-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-hbm-max-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-hbm-exit-max-command-state = "dsi_hs_mode";
 
@@ -3570,9 +3570,9 @@
 				qcom,mdss-dsi-pwm-switch-low-restore-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-high-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-timming-pwm-switch-low-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-timming-pwm-switch-onepulse-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-pwm-switch-1to3-command-state = "dsi_hs_mode";
-				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_mode";
+				qcom,mdss-dsi-pwm-switch-3to1-command-state = "dsi_hs_pack_mode";
 				qcom,mdss-dsi-hbm-max-command-state = "dsi_hs_mode";
 				qcom,mdss-dsi-hbm-exit-max-command-state = "dsi_hs_mode";
 
@@ -3695,5 +3695,6 @@
 	oplus,pwm-switch-wait-te-tx;
 	oplus,pwm-switch-restore-support;
 	oplus,pwm-create-thread-disable-duty;
+	oplus,cmdq-pack-support;
 };
 

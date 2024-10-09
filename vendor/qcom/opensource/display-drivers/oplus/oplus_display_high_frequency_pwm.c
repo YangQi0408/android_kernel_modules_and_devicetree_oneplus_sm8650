@@ -503,7 +503,7 @@ int oplus_panel_pwm_switch(struct dsi_panel *panel, u32 *backlight_level)
 		return rc;
 	}
 
-	if (bl_lvl == 0 || (!panel->pwm_params.directional_onepulse_switch && bl_lvl == 1))
+	if (bl_lvl == 0 || (!panel->pwm_params.directional_onepulse_switch && bl_lvl == 1 && strcmp(panel->name, "P 3 AB781 dsc cmd mode panel")))
 		return rc;
 
 	if (panel->power_mode == SDE_MODE_DPMS_OFF) {

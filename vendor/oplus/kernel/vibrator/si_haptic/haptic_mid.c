@@ -18,7 +18,9 @@
 #include "sih688x_reg.h"
 #include "haptic_regmap.h"
 #include "haptic_misc.h"
-
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+#include "../aw8697_haptic/haptic_feedback.h"
+#endif
 typedef struct sih_match_funclist {
 	haptic_func_t *haptic_func;
 	const struct regmap_config *haptic_regmap_config;
@@ -50,6 +52,10 @@ int i2c_read_bytes(sih_haptic_t *sih_haptic, uint8_t reg_addr,
 	ret = i2c_master_recv(sih_haptic->i2c, buf, len);
 	if (ret != len) {
 		hp_err("%s:couldn't read data, ret=%d\n", __func__, ret);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_READ_TRACK_ERR,
+				reg_addr, ret);
+#endif
 		return ret;
 	}
 	return ret;
@@ -65,8 +71,13 @@ int i2c_write_bytes(sih_haptic_t *sih_haptic, uint8_t reg_addr,
 	data[0] = reg_addr;
 	memcpy(&data[1], buf, len);
 	ret = i2c_master_send(sih_haptic->i2c, data, len + 1);
-	if (ret < 0)
+	if (ret < 0) {
 		hp_err("%s:i2c master send 0x%02x err\n", __func__, reg_addr);
+#ifdef CONFIG_HAPTIC_FEEDBACK_MODULE
+		(void)oplus_haptic_track_dev_err(HAPTIC_I2C_WRITE_TRACK_ERR,
+				reg_addr, ret);
+#endif
+	}
 	kfree(data);
 	return ret;
 }

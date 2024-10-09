@@ -101,6 +101,7 @@
 #define USB_OTG_CURR_LIMIT_HIGH  1700
 #define USB_OTG_REAL_SOC_MIN     10
 #define FFC_FULL_DELTA_ITEARM_MA 400
+#define PLATFORM_GAUGE_FULL_VOLT_MV	4535
 #endif
 
 /* Generic definitions */
@@ -572,6 +573,7 @@ struct battery_chg_dev {
 	int otg_scheme;
 	bool pmic_is_pm7250b;
 	int ffc_full_delta_iterm_ma;
+	int platform_gauge_full_volt_mv;
 	int otg_boost_src;
 	int otg_curr_limit_max;
 	int otg_curr_limit_high;

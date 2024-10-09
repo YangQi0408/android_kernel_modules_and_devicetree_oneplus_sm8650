@@ -280,8 +280,8 @@
 #define BQ28Z610_DEEP_DISCHG_CHECK 		0xFF
 #define BQ28Z610_DEEP_DISCHG_NUM_CMD		0x4082
 #define BQ28Z610_DEEP_DISCHG_NAME_CMD		0x004A
-#define BQ28Z610_DEEP_DISCHG_SIZE		9
-#define BQ28Z610_DEEP_DISCHG_CEHECK_SIZE	11
+#define BQ28Z610_DEEP_DISCHG_SIZE		12
+#define BQ28Z610_DEEP_DISCHG_CEHECK_SIZE	14
 #define BQ28Z610_TERM_VOLT_CMD			0x45BE
 #define BQ28Z610_TERM_VOLT_SIZE			4
 #define BQ28Z610_TERM_VOLT_S_CMD		0x45C3
@@ -602,6 +602,9 @@ struct chip_bq27541 {
 	struct test_feature *battery_id_gpio_test;
 #endif
 	struct battery_manufacture_info battinfo;
+	int deep_dischg_count_pre;
+	int deep_term_volt_pre;
+	int last_cc_pre;
 };
 
 extern bool oplus_gauge_ic_chip_is_null(

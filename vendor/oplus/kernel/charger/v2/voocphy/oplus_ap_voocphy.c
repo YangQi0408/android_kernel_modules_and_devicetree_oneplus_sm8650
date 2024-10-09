@@ -47,6 +47,17 @@ enum {
 	FASTCHG_TEMP_RANGE_NORMAL,
 };
 
+static const char * const temp_region_text[] = {
+	[VOOCPHY_BATT_TEMP_LITTLE_COLD]		= "little_cold",
+	[VOOCPHY_BATT_TEMP_COOL]		= "cool",
+	[VOOCPHY_BATT_TEMP_LITTLE_COOL]		= "little_cool",
+	[VOOCPHY_BATT_TEMP_LITTLE_COOL_HIGH]	= "little_cool_high",
+	[VOOCPHY_BATT_TEMP_NORMAL]		= "normal",
+	[VOOCPHY_BATT_TEMP_NORMAL_HIGH]		= "normal_high",
+	[VOOCPHY_BATT_TEMP_WARM]		= "warm",
+	[VOOCPHY_BATT_TEMP_MAX]			= "invalid",
+};
+
 enum {
 	BAT_TEMP_NATURAL = 0,
 	BAT_TEMP_HIGH0,
@@ -1244,7 +1255,7 @@ void oplus_voocphy_get_soc_and_temp_with_enter_fastchg(struct oplus_voocphy_mana
 		chip->vooc_temp_cur_range = FASTCHG_TEMP_RANGE_NORMAL_HIGH;
 		chip->fastchg_batt_temp_status = BAT_TEMP_NORMAL_HIGH;
 		sys_curve_temp_idx = BATT_SYS_CURVE_TEMP_NORMAL_HIGH;
-		chip->batt_temp_plugin = VOOCPHY_BATT_TEMP_NORMAL;
+		chip->batt_temp_plugin = VOOCPHY_BATT_TEMP_NORMAL_HIGH;
 		break;
 	case FASTCHG_TEMP_RANGE_WARM:
 		chip->vooc_temp_cur_range = FASTCHG_TEMP_RANGE_WARM;
@@ -1284,7 +1295,7 @@ void oplus_voocphy_get_soc_and_temp_with_enter_fastchg(struct oplus_voocphy_mana
 				chip->vooc_temp_cur_range = FASTCHG_TEMP_RANGE_NORMAL_HIGH;
 				chip->fastchg_batt_temp_status = BAT_TEMP_NORMAL_HIGH;
 				sys_curve_temp_idx = BATT_SYS_CURVE_TEMP_NORMAL_HIGH;
-				chip->batt_temp_plugin = VOOCPHY_BATT_TEMP_NORMAL;
+				chip->batt_temp_plugin = VOOCPHY_BATT_TEMP_NORMAL_HIGH;
 			} else {
 				chip->vooc_temp_cur_range = FASTCHG_TEMP_RANGE_WARM;
 				chip->fastchg_batt_temp_status = BAT_TEMP_WARM;
@@ -5301,6 +5312,25 @@ static int oplus_voocphy_vol_event_handle(struct device *dev, unsigned long data
 			chip->ap_need_change_current
 			    = oplus_voocphy_set_fastchg_current(chip);
 
+		if (chip->batt_temp_plugin >= 0 && chip->batt_temp_plugin < VOOCPHY_BATT_TEMP_MAX &&
+		    chip->full_voltage[0].vol_1time > 0) {
+			if (chip->gauge_vbatt > chip->full_voltage[chip->batt_temp_plugin].vol_1time) {
+				voocphy_info("%s vbatt 1time fastchg full: %d > %d",
+					     temp_region_text[chip->batt_temp_plugin], chip->gauge_vbatt,
+					     chip->full_voltage[chip->batt_temp_plugin].vol_1time);
+				oplus_voocphy_set_status_and_notify_ap(chip, FAST_NOTIFY_FULL);
+			} else if (chip->gauge_vbatt > chip->full_voltage[chip->batt_temp_plugin].vol_ntime) {
+				fast_full_count++;
+				if (fast_full_count > 5) {
+					voocphy_info("%s vbatt ntime fastchg full: %d > %d",
+						     temp_region_text[chip->batt_temp_plugin], chip->gauge_vbatt,
+						     chip->full_voltage[chip->batt_temp_plugin].vol_ntime);
+					oplus_voocphy_set_status_and_notify_ap(chip, FAST_NOTIFY_FULL);
+				}
+			}
+			goto check_vol_end;
+		}
+
 		//notify full at some condition
 		if ((chip->batt_temp_plugin == VOOCPHY_BATT_TEMP_LITTLE_COLD				/*0-5 chg to 4430mV*/
 		     && chip->gauge_vbatt > chip->vooc_little_cold_full_voltage)
@@ -5325,6 +5355,7 @@ static int oplus_voocphy_vol_event_handle(struct device *dev, unsigned long data
 			}
 		}
 
+check_vol_end:
 		status = oplus_voocphy_monitor_timer_start(chip, VOOC_THREAD_TIMER_VOL, VOOC_VOL_EVENT_TIME);
 	}
 
@@ -6576,6 +6607,22 @@ static int oplus_voocphy_parse_batt_curves(struct oplus_voocphy_manager *chip)
 			chip->soc_range_data[0] = -EINVAL;
 		}
 	}
+
+	rc = of_property_count_elems_of_size(node, "oplus_spec,full_voltage", sizeof(u8));
+	if (rc == sizeof(chip->full_voltage)) {
+		length = rc / sizeof(u32);
+		rc = of_property_read_u32_array(node, "oplus_spec,full_voltage", (u32 *)chip->full_voltage, length);
+		if (rc) {
+			chg_err("read oplus_spec,full_voltage failed, rc=%d\n", rc);
+			memset(chip->full_voltage, 0, sizeof(chip->full_voltage));
+		}
+	} else {
+		voocphy_info("full_voltage failed, rc=%d\n", rc);
+		memset(chip->full_voltage, 0, sizeof(chip->full_voltage));
+	}
+	for (i = 0; i < VOOCPHY_BATT_TEMP_MAX; i++)
+		voocphy_info("%s_full_voltage 1time=%d, ntime=%d\n", temp_region_text[i],
+			     chip->full_voltage[i].vol_1time, chip->full_voltage[i].vol_ntime);
 
 	oplus_voocphy_parse_svooc_batt_curves(chip);
 

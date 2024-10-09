@@ -121,6 +121,7 @@
 	};
 
 };
+
 &modem_pas {
     status = "disabled";
 };

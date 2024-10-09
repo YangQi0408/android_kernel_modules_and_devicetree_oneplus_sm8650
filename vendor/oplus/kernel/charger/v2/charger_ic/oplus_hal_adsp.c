@@ -84,6 +84,8 @@ static int oplus_chg_8350_get_icl(struct oplus_chg_ic_dev *ic_dev, int *icl_ma);
 static int oplus_chg_set_input_current_with_no_aicl(struct battery_chg_dev *bcdev, int current_ma);
 static bool oplus_vooc_get_fastchg_ing(struct battery_chg_dev *bcdev);
 static bool is_common_topic_available(struct battery_chg_dev *bcdev);
+static bool oplus_get_ufcs_charging(struct battery_chg_dev *bcdev);
+__maybe_unused static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev);
 #endif /*OPLUS_FEATURE_CHG_BASIC*/
 
 #ifdef OPLUS_FEATURE_CHG_BASIC
@@ -343,12 +345,15 @@ static void oplus_get_props_from_adsp_by_buffer(void)
 		chg_err("common topic not found\n");
 	}
 
-	fastchg_ing = oplus_vooc_get_fastchg_ing(bcdev);
+	fastchg_ing = oplus_vooc_get_fastchg_ing(bcdev) ||
+	    oplus_get_ufcs_charging(bcdev) ||
+	    oplus_get_pps_charging(bcdev);
 	fcss_status = fastchg_ing | ((u8)ffc_status << 1) | ((u8)temp_region << 3);
 
 	if(pre_fcss_status != fcss_status) {
 		oplus_adsp_voocphy_set_full_para_qbg(bcdev, fcss_status);
 		pre_fcss_status = fcss_status;
+		chg_info("fcss_status is %d\n", fcss_status);
 	}
 }
 
@@ -4912,7 +4917,7 @@ static void oplus_plugin_irq_work(struct work_struct *work)
  * battery gauge ops *
  **********************************************************************/
 #ifdef OPLUS_FEATURE_CHG_BASIC
-__maybe_unused static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev)
+static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev)
 {
 	bool pps_charging = false;
 	union mms_msg_data data = {0};
@@ -4930,6 +4935,26 @@ __maybe_unused static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev)
 		pps_charging = !!data.intval;
 	}
 	return pps_charging;
+}
+
+static bool oplus_get_ufcs_charging(struct battery_chg_dev *bcdev)
+{
+	bool ufcs_charging = false;
+	union mms_msg_data data = {0};
+
+	if (!bcdev) {
+		return false;
+	}
+
+	if (!bcdev->ufcs_topic)
+		bcdev->ufcs_topic = oplus_mms_get_by_name("ufcs");
+
+	if (bcdev->ufcs_topic) {
+		oplus_mms_get_item_data(bcdev->ufcs_topic,
+					UFCS_ITEM_CHARGING, &data, false);
+		ufcs_charging = !!data.intval;
+	}
+	return ufcs_charging;
 }
 
 __maybe_unused static int fg_sm8350_get_battery_mvolts(void)

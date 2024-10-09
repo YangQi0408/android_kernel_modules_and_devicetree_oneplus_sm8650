@@ -4666,10 +4666,7 @@ int cam_cpas_hw_probe(struct platform_device *pdev,
 	cpas_core->ahb_bus_scaling_disable = false;
 	cpas_core->full_state_dump = false;
 	cpas_core->smart_qos_dump = false;
-#ifdef OPLUS_FEATURE_CAMERA_COMMON
-	cpas_core->force_hlos_drv = true;
-	cpas_core->force_cesta_sw_client = true;
-#endif
+
 	atomic64_set(&cpas_core->monitor_head, -1);
 
 	mutex_init(&cpas_hw->hw_mutex);

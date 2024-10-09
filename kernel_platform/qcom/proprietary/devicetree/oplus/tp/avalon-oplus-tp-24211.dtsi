@@ -1,10 +1,10 @@
 &pm8550vs_c_gpios {
-	ts_vcc_active_primary: ts_vcc_active_primary {
+	ts_vddio_active_primary: ts_vddio_active_primary {
 		pins = "gpio3";
 		function = "normal";
-		input-disable;
-		output-low;
+		input-enable;
 		power-source = <1>; /* 1.8V */
+		bias-disable;
 		qcom,drive-strength = <2>;
 	};
 };
@@ -42,7 +42,6 @@
 		pinctrl-names = "hall_interrupt_input";
 		pinctrl-0 = <&hall_interrupt_input>;
 
-		turn_upside_down;
 		interf_stable_limit = <700 700 700>;
 		interf_judege_limit = <4000 2000>;
 		interf_up_tolen = <2500 2000 2500 2000>;
@@ -51,6 +50,7 @@
 		position_judge_tolen = <3300 3300>;
 		default_position_xtolen = <2500 2500>;
 
+		new_posupdate_support;
 		exception_upload_support;
 		health_monitor_support;
 	};
@@ -259,12 +259,11 @@
 		/* Other HW Resource */
 		synaptics,irq-gpio = <&tlmm 129 0x2008>;
 		synaptics,reset-gpio = <&tlmm 128 0x1>;
-		pinctrl-names = "default", "ts_vcc_active_primary";
-		pinctrl-0 = <&ts_int_active &ts_reset_active>;
-		pinctrl-1 = <&ts_vcc_active_primary>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&ts_int_active &ts_reset_active &ts_vddio_active_primary>;
 
 		/* Power Config */
-		synaptics,vdd-gpio = <&pm8550vs_c_gpios 3 0x1>;
+		synaptics,avdd-gpio = <&pm8550vs_c_gpios 3 0x1>;
 		vdd-supply = <&L22B>;
 		synaptics,avdd-name = "vdd";
 

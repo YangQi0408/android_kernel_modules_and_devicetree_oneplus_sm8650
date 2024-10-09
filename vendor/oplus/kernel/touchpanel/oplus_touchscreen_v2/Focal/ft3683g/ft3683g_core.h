@@ -215,6 +215,16 @@
 #define FTS_720HZ_GAME_MODE                     0x03
 #define INTELLIGENT_GAME_MODE                   11
 #define EXTREME_GAME_MODE                       12
+
+enum _FTS_RST_REASON {
+	FTS_RST_REASON_UNKNOWN  = 0,
+	FTS_RST_REASON_FWUPDATE = 0x01,
+	FTS_RST_REASON_WDT      = 0x02,
+	FTS_RST_REASON_EXTERNAL = 0x04,
+	FTS_RST_REASON_PWR      = 0x08,
+};
+
+
 enum _FTS_TOUCH_ETYPE {
 	TOUCH_DEFAULT = 0x00,
 	TOUCH_PROTOCOL_v2 = 0x02,

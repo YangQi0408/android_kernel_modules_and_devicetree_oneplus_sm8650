@@ -67,9 +67,7 @@
 		qcom,same-dt-multi-dev;
 		/* For AOP communication, use direct QMP instead of mailbox */
 		qcom,qmp = <&aoss_qmp>;
-		//#ifdef OPLUS_FEATURE_WIFI_MAC
 		use-nv-mac;
-		//#endif /* OPLUS_FEATURE_WIFI_MAC */
 		vdd-wlan-io-supply = <&L15B>;
 		qcom,vdd-wlan-io-config = <1800000 1800000 0 0 1>;
 		vdd-wlan-io12-supply = <&L3C>;

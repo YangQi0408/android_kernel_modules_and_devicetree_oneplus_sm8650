@@ -44,6 +44,8 @@
 
 #include "../oplus_chg_ops_manager.h"
 #include "../voocphy/oplus_voocphy.h"
+#include "../oplus_pps.h"
+#include "../oplus_ufcs.h"
 
 #include "oplus_sy6974b.h"
 
@@ -83,6 +85,7 @@ struct chip_sy6974b {
 	int			before_unsuspend_icl;
 	int			normal_init_delay_ms;
 	int			other_init_delay_ms;
+	int			charger_current_pre;
 
 	struct wakeup_source *suspend_ws;
 	/*fix chgtype identify error*/
@@ -421,6 +424,7 @@ int sy6974b_chg_get_dyna_aicl_result(void)
 	return aicl_result;
 }
 
+#define AICL_POINT_VOL_5V_PHASE0 4350
 #define AICL_POINT_VOL_5V_PHASE1 4140
 #define AICL_POINT_VOL_5V_PHASE2 4000
 #define HW_AICL_POINT_VOL_5V_PHASE1 4440
@@ -434,16 +438,21 @@ void sy6974b_set_aicl_point(int vbatt)
 	if (!chip)
 		return;
 
-	if (chip->hw_aicl_point == HW_AICL_POINT_VOL_5V_PHASE1 &&
-	    vbatt > AICL_POINT_VOL_5V_PHASE1) {
-		chip->hw_aicl_point = HW_AICL_POINT_VOL_5V_PHASE2;
-		chip->sw_aicl_point = SW_AICL_POINT_VOL_5V_PHASE2;
-		sy6974b_set_vindpm_vol(chip->hw_aicl_point);
-	} else if(chip->hw_aicl_point == HW_AICL_POINT_VOL_5V_PHASE2 &&
-	          vbatt < AICL_POINT_VOL_5V_PHASE2) {
-		chip->hw_aicl_point = HW_AICL_POINT_VOL_5V_PHASE1;
-		chip->sw_aicl_point = SW_AICL_POINT_VOL_5V_PHASE1;
-		sy6974b_set_vindpm_vol(chip->hw_aicl_point);
+	if (vbatt > AICL_POINT_VOL_5V_PHASE0){
+		sy6974b_config_interface(chip, REG07_SY6974B_ADDRESS, 0x2, (BIT(1) | BIT(0)));
+	} else {
+		sy6974b_config_interface(chip, REG07_SY6974B_ADDRESS, 0x0, (BIT(1) | BIT(0)));
+		if (chip->hw_aicl_point == HW_AICL_POINT_VOL_5V_PHASE1 &&
+		    vbatt > AICL_POINT_VOL_5V_PHASE1) {
+			chip->hw_aicl_point = HW_AICL_POINT_VOL_5V_PHASE2;
+			chip->sw_aicl_point = SW_AICL_POINT_VOL_5V_PHASE2;
+			sy6974b_set_vindpm_vol(chip->hw_aicl_point);
+		} else if(chip->hw_aicl_point == HW_AICL_POINT_VOL_5V_PHASE2 &&
+			  vbatt < AICL_POINT_VOL_5V_PHASE2) {
+			chip->hw_aicl_point = HW_AICL_POINT_VOL_5V_PHASE1;
+			chip->sw_aicl_point = SW_AICL_POINT_VOL_5V_PHASE1;
+			sy6974b_set_vindpm_vol(chip->hw_aicl_point);
+		}
 	}
 }
 
@@ -503,6 +512,13 @@ int sy6974b_input_current_limit_write(int current_ma)
 	if (atomic_read(&chip->charger_suspended) == 1) {
 		chg_err("suspend,ignore set current=%dmA\n", current_ma);
 		return 0;
+	}
+
+	if (chip->charger_current_pre == current_ma) {
+		pr_info("charger_current_pre = %d.\n", current_ma);
+		return 0;
+	} else {
+		chip->charger_current_pre = current_ma;
 	}
 
 	/*first: icl down to 500mA, step from pre icl*/
@@ -629,8 +645,10 @@ aicl_rerun:
 		chip->before_suspend_icl = sy6974b_usb_icl[i];
 		chg_err("during aicl, force input current to 100mA,before=%dmA\n", chip->before_suspend_icl);
 		rc = sy6974b_input_current_limit_without_aicl(SUSPEND_IBUS_MA);
+		chip->charger_current_pre = SUSPEND_IBUS_MA;
 	} else {
 		rc = sy6974b_input_current_limit_without_aicl(sy6974b_usb_icl[i]);
+		chip->charger_current_pre = sy6974b_usb_icl[i];
 	}
 	rc = sy6974b_set_vindpm_vol(chip->hw_aicl_point);
 	return rc;
@@ -1334,6 +1352,7 @@ int sy6974b_unsuspend_charger(void)
 			chg_err("ignore set icl [%d %d]\n", chip->before_suspend_icl, chip->before_unsuspend_icl);
 		} else {
 			sy6974b_input_current_limit_without_aicl(chip->before_suspend_icl);
+			chip->charger_current_pre = chip->before_suspend_icl;
 		}
 
 		rc = sy6974b_config_interface(chip, REG00_SY6974B_ADDRESS,
@@ -1344,20 +1363,22 @@ int sy6974b_unsuspend_charger(void)
 		}
 
 		if (g_oplus_chip) {
-				if (oplus_vooc_get_fastchg_to_normal() == false
-						&& oplus_vooc_get_fastchg_to_warm() == false) {
-					if (g_oplus_chip->authenticate
-							&& g_oplus_chip->mmi_chg
-							&& !g_oplus_chip->balancing_bat_stop_chg
-							&& (g_oplus_chip->charging_state != CHARGING_STATUS_FAIL)
-							&& oplus_vooc_get_allow_reading()
-							&& !oplus_is_rf_ftm_mode()) {
-						sy6974b_enable_charging();
-					}
+			if (oplus_vooc_get_fastchg_to_normal() == false
+					&& oplus_vooc_get_fastchg_to_warm() == false
+					&& oplus_pps_get_pps_mos_started() == false
+					&& oplus_ufcs_get_ufcs_mos_started() == false) {
+				if (g_oplus_chip->authenticate
+						&& g_oplus_chip->mmi_chg
+						&& !g_oplus_chip->balancing_bat_stop_chg
+						&& (g_oplus_chip->charging_state != CHARGING_STATUS_FAIL)
+						&& oplus_vooc_get_allow_reading()
+						&& !oplus_is_rf_ftm_mode()) {
+					sy6974b_enable_charging();
 				}
-			} else {
-				sy6974b_enable_charging();
 			}
+		} else {
+			sy6974b_enable_charging();
+		}
 	return rc;
 #endif
 }
@@ -1688,6 +1709,11 @@ int sy6974b_set_iindet(void)
 	if (rc < 0) {
 		chg_err("Couldn't set REG07_SY6974B_IINDET_EN_MASK rc = %d\n", rc);
 	}
+
+	msleep(45); /*Modify the delay within 30ms to 50ms*/
+	rc = sy6974b_config_interface(chip, REG07_SY6974B_ADDRESS,
+                                        REG07_SY6974B_IINDET_DIS_FORCE_DET,
+					REG07_SY6974B_IINDET_EN_MASK);
 
 	return rc;
 }
@@ -2034,6 +2060,7 @@ int sy6974b_hardware_init(void)
 		return 0;
 	} else {
 		sy6974b_input_current_limit_without_aicl(DEFAULT_IBUS_MA);
+		chip->charger_current_pre = DEFAULT_IBUS_MA;
 	}
 
 	return true;
@@ -2180,6 +2207,7 @@ static int oplus_sy6974b_hardware_init(void)
 			chg_err("oplus_sy6974b_hardware_init enable charging failed \n");
 		} else {
 			sy6974b_input_current_limit_without_aicl(DEFAULT_IBUS_MA);
+			chip->charger_current_pre = DEFAULT_IBUS_MA;
 		}
 	}
 	return ret;
@@ -2349,6 +2377,8 @@ static int sy6974b_set_vchg(struct charger_device *chg_dev, u32 volt)
 
 static int sy6974b_set_icl(struct charger_device *chg_dev, u32 curr)
 {
+	struct chip_sy6974b *chip = charger_ic;
+	chip->charger_current_pre = curr/1000;
 	return sy6974b_input_current_limit_without_aicl(curr/1000);
 }
 
@@ -2967,6 +2997,7 @@ static irqreturn_t sy6974b_irq_handler(int irq, void *data)
 		chip->bc12_retried = 0;
 		chip->bc12_delay_cnt = 0;
 		chip->oplus_charger_type = POWER_SUPPLY_TYPE_UNKNOWN;
+		chip->charger_current_pre = -1;
 		oplus_chg_track_check_wired_charging_break(0);
 		#ifdef CONFIG_OPLUS_CHARGER_MTK
 		sy6974b_inform_charger_type(chip);
@@ -3267,6 +3298,7 @@ static int sy6974b_charger_probe(struct i2c_client *client,
 	chip->bc12_done = false;
 	chip->bc12_retried = 0;
 	chip->bc12_delay_cnt = 0;
+	chip->charger_current_pre = -1;
 	chip->chg_consumer =
 		charger_manager_get_by_name(&client->dev, "sy6974b");
 

@@ -3634,13 +3634,15 @@ int oplus_adfr_test_te_high_gear(void *dsi_display) {
 		high_gear = 90;
 		break;
 	case 120:
-	case 60:
 	case 90:
 		if (!oplus_adfr_decreasing_step_is_enabled(p_oplus_adfr_params)) {
 			high_gear = 55;
 		} else {
 			high_gear = 52;
 		}
+		break;
+	case 60:
+		high_gear = 45;
 		break;
 	default:
 		high_gear = 55;
@@ -3808,7 +3810,7 @@ static irqreturn_t oplus_adfr_test_te_irq_handler(int irq, void *data)
 				 * 144hz: >90 is 144
 				 * 120hz: >55 is 120, sw_fps==60 is 60
 				 * 90hz: >55 is 90
-				 * 60hz: >55 is 60 */
+				 * 60hz: >45 is 60 */
 				if (temp_refresh_rate > oplus_adfr_test_te_high_gear(display)) {
 					p_oplus_adfr_params->test_te.high_refresh_rate_count++;
 					p_oplus_adfr_params->test_te.middle_refresh_rate_count = 0;
@@ -3825,7 +3827,7 @@ static irqreturn_t oplus_adfr_test_te_irq_handler(int irq, void *data)
 				 * 144hz: 0~90 is 72
 				 * 120hz: 17~55 is 30
 				 * 90hz: 17~55 is 30
-				 * 60hz: 17~55 is 30 */
+				 * 60hz: 17~45 is 30 */
 				} else if (temp_refresh_rate > oplus_adfr_test_te_low_gear(display) && temp_refresh_rate <= oplus_adfr_test_te_high_gear(display)) {
 					p_oplus_adfr_params->test_te.high_refresh_rate_count = 0;
 					/* update refresh rate if one continous temp_refresh_rate are greater than low gear and less than or equal to high gear */
@@ -3845,7 +3847,7 @@ static irqreturn_t oplus_adfr_test_te_irq_handler(int irq, void *data)
 				 * 144hz: >90 is 144
 				 * 120hz: >52 is 120, sw_fps==60 is 60
 				 * 90hz: >52 is 90
-				 * 60hz: >52 is 60 */
+				 * 60hz: >45 is 60 */
 				if (temp_refresh_rate > oplus_adfr_test_te_high_gear(display)) {
 					p_oplus_adfr_params->test_te.high_refresh_rate_count++;
 					p_oplus_adfr_params->test_te.middle_refresh_rate_count = 0;
@@ -3862,7 +3864,7 @@ static irqreturn_t oplus_adfr_test_te_irq_handler(int irq, void *data)
 				 * 144hz: 13~90 is 36
 				 * 120hz: 11~52 is 30
 				 * 90hz: 11~52 is 30
-				 * 60hz: 11~52 is 30 */
+				 * 60hz: 11~45 is 30 */
 				} else if (temp_refresh_rate > oplus_adfr_test_te_low_gear(display) && temp_refresh_rate <= oplus_adfr_test_te_high_gear(display)) {
 					p_oplus_adfr_params->test_te.middle_refresh_rate_count++;
 					if (p_oplus_adfr_params->test_te.high_refresh_rate_count > 0) {

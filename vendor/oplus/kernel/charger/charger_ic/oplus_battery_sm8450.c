@@ -643,12 +643,12 @@ void oplus_get_props_from_adsp_by_buffer(void)
 			full_vol = chip->limits.little_cool_vfloat_sw_limit;
 			full_curr = chip->limits.iterm_ma;
 		} else {
-			full_vol = chip->limits.ffc2_normal_vfloat_sw_limit;
+			full_vol = bcdev->platform_gauge_full_volt_mv;
 			full_curr = chip->limits.ffc2_normal_fastchg_ma + bcdev->ffc_full_delta_iterm_ma;
 		}
 	} else {
 		if (chip->fastchg_ffc_status) {
-			full_vol = chip->limits.ffc2_normal_vfloat_sw_limit;
+			full_vol = bcdev->platform_gauge_full_volt_mv;
 			full_curr = chip->limits.ffc2_normal_fastchg_ma + bcdev->ffc_full_delta_iterm_ma;
 		} else {
 			full_vol = chip->limits.normal_vfloat_sw_limit;
@@ -4945,8 +4945,15 @@ static int oplus_chg_parse_custom_dt(struct oplus_chg_chip *chip)
 		bcdev->ffc_full_delta_iterm_ma = FFC_FULL_DELTA_ITEARM_MA;
 	}
 
+	rc = of_property_read_u32(node, "qcom,platform_gauge_full_volt_mv",
+			&bcdev->platform_gauge_full_volt_mv);
+	if (rc < 0) {
+		bcdev->platform_gauge_full_volt_mv = PLATFORM_GAUGE_FULL_VOLT_MV;
+	}
+
 	bcdev->pmic_is_pm7250b = of_property_read_bool(bcdev->dev->of_node, "qcom,pmic-is-pm7250b");
-	chg_err("pmic_is_pm7250b:%d,ffc_full_delta_iterm_ma:%d\n", bcdev->pmic_is_pm7250b, bcdev->ffc_full_delta_iterm_ma);
+	chg_err("pmic_is_pm7250b:%d,ffc_full_delta_iterm_ma:%d,full_volt_mv:%d\n", bcdev->pmic_is_pm7250b,
+		bcdev->ffc_full_delta_iterm_ma, bcdev->platform_gauge_full_volt_mv);
 
 	return 0;
 }
@@ -6706,6 +6713,7 @@ bool oplus_usbtemp_change_curr_range(struct oplus_chg_chip *chip, int retry_cnt,
 			|| (current_curr_change_temp_r - last_curr_change_usb_temp_r) >= OPLUS_USBTEMP_CURR_CHANGE_TEMP) {
 		for (i = 1; i <= retry_cnt; i++) {
 			mdelay(RETRY_CNT_DELAY);
+			oplus_get_usbtemp_volt(chip);
 			get_usb_temp(chip);
 			if ((chip->usb_temp_r - last_curr_change_usb_temp_r) >= OPLUS_USBTEMP_CURR_CHANGE_TEMP
 					&& chip->usb_temp_r < USB_100C)
@@ -6746,6 +6754,7 @@ bool oplus_usbtemp_trigger_for_high_temp(struct oplus_chg_chip *chip, int retry_
 		pr_err("in usbtemp higher than 57 or 69!\n");
 		for (i = 1; i < retry_cnt; i++) {
 			mdelay(RETRY_CNT_DELAY);
+			oplus_get_usbtemp_volt(chip);
 			get_usb_temp(chip);
 			if (chip->usbtemp_curr_status == OPLUS_USBTEMP_LOW_CURR) {
 				if (chip->usb_temp_r >= chip->usbtemp_ntc_temp_low && chip->usb_temp_r < USB_100C)
@@ -6780,6 +6789,7 @@ bool oplus_usbtemp_trigger_for_rise_fast_temp(struct oplus_chg_chip *chip, int r
 		pr_err("in usbtemp rise fast with usbtemp!\n");
 		for (i = 1; i <= retry_cnt; i++) {
 			mdelay(RETRY_CNT_DELAY);
+			oplus_get_usbtemp_volt(chip);
 			get_usb_temp(chip);
 			if (chip->usbtemp_curr_status == OPLUS_USBTEMP_LOW_CURR) {
 				if ((chip->usb_temp_r >= g_tbatt_temp/10 + chip->usbtemp_temp_gap_low_with_batt_temp)
@@ -6867,6 +6877,7 @@ bool oplus_usbtemp_trigger_for_rise_fast_without_temp(struct oplus_chg_chip *chi
 
 #define OPCHG_LOW_USBTEMP_RETRY_COUNT 10
 #define OPLUS_CHG_CURRENT_READ_COUNT 15
+#define OPLUS_USBTEMP_HIGH_CURR_THRD  5000
 static int oplus_usbtemp_monitor_main_new_method(void *data)
 {
 	int delay = 0;
@@ -6887,7 +6898,9 @@ static int oplus_usbtemp_monitor_main_new_method(void *data)
 	struct timespec curr_range_change_first_time;
 	struct timespec curr_range_change_last_time;
 	bool usbtemp_first_time_in_curr_range = false;
-	static current_read_count = 0;
+	static int current_read_count = 0;
+	struct timespec pre_hi_current_time;
+	struct timespec now_time;
 
 	/* add for variables init */
 	curr_range_change_first_time.tv_sec = 0;
@@ -6954,6 +6967,16 @@ static int oplus_usbtemp_monitor_main_new_method(void *data)
 				&& chip->usbtemp_pre_batt_current >= 5000) {
 			curr_range_change = true;
 			curr_range_change_first_time = current_kernel_time();
+		} else if (curr_range_change == false &&
+		           chip->usbtemp_batt_current < OPLUS_USBTEMP_HIGH_CURR_THRD &&
+		           chip->usbtemp_change_across_unplug) {
+			chip->usbtemp_change_across_unplug = false;
+			now_time = current_kernel_time();
+			if (now_time.tv_sec - pre_hi_current_time.tv_sec < OPLUS_USBTEMP_CHANGE_RANGE_TIME) {
+				curr_range_change = true;
+				curr_range_change_first_time = pre_hi_current_time;
+			}
+			chg_err("reconnected when hi_current, need keep %d seconds", now_time.tv_sec - pre_hi_current_time.tv_sec);
 		} else if (curr_range_change == true && chip->usbtemp_batt_current >= 5000
 				&& chip->usbtemp_pre_batt_current < 5000) {
 			curr_range_change = false;
@@ -7052,6 +7075,9 @@ static int oplus_usbtemp_monitor_main_new_method(void *data)
 		msleep(delay);
 		log_count++;
 		chip->usbtemp_pre_batt_current = batt_current;
+		if (chip->usbtemp_pre_batt_current > OPLUS_USBTEMP_HIGH_CURR_THRD) {
+			pre_hi_current_time = current_kernel_time();
+		}
 		if (log_count == 40) {
 			chg_err("==================usbtemp_volt_l[%d], usb_temp_l[%d], usbtemp_volt_r[%d], usb_temp_r[%d]\n",
 					chip->usbtemp_volt_l, chip->usb_temp_l, chip->usbtemp_volt_r, chip->usb_temp_r);
@@ -8401,8 +8427,10 @@ static void oplus_plugin_irq_work(struct work_struct *work)
     #endif
 
 		bcdev->pd_svooc = false;
-		oplus_pps_stop_disconnect();
-		oplus_pps_variables_reset(true);
+		if (oplus_pps_get_chg_status() == PPS_CHARGERING) {
+			oplus_pps_stop_disconnect();
+			oplus_pps_variables_reset(true);
+		}
 		bcdev->hvdcp_detach_time = cpu_clock(smp_processor_id()) / CPU_CLOCK_TIME_MS;
 		printk(KERN_ERR "!!! %s: the hvdcp_detach_time:%lu, detect time %lu \n", __func__, bcdev->hvdcp_detach_time, bcdev->hvdcp_detect_time);
 		if (bcdev->hvdcp_detach_time - bcdev->hvdcp_detect_time <= OPLUS_HVDCP_DETECT_TO_DETACH_TIME) {

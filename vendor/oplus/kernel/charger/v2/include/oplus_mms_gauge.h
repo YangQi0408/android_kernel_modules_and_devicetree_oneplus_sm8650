@@ -32,6 +32,8 @@ enum gauge_topic_item {
 	GAUGE_ITEM_UV_INC,
 	GAUGE_ITEM_FCC_COEFF,
 	GAUGE_ITEM_SOH_COEFF,
+	GAUGE_ITEM_RATIO_VALUE,
+	GAUGE_ITEM_RATIO_TRANGE,
 };
 
 enum gauge_type_id {

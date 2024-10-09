@@ -212,6 +212,22 @@ int sc820cs_page_read(struct cam_eeprom_ctrl_t *e_ctrl, uint8_t *memptr, int pag
 	return rc;
 }
 
+int sc820cs_flag_precheck(uint8_t *data) {
+    int rc = 0;
+    int item_num = sc820cs_checksum_info.groupInfo.ItemNum;
+    struct OtpGroupInfo *groupinfo = &sc820cs_checksum_info.groupInfo;
+
+    for (int i=0; i < item_num; i++) {
+        if (data[groupinfo->CheckItemOffset[i]] != groupinfo->GroupFlag){
+            rc = -1;
+            CAM_ERR(CAM_EEPROM, "data[%d] addr[0x%x]:0x%x, OTP Flag Check Invalid", i, groupinfo->CheckItemOffset[i], data[groupinfo->CheckItemOffset[i]]);
+            break;
+        }
+    }
+
+    return rc;
+}
+
 int sc820cs_otp_check(uint8_t *data) {
 	int rc = 0;
 	int sum = 0;
@@ -246,7 +262,7 @@ int oplus_cam_eeprom_sc820cs(struct cam_eeprom_ctrl_t *e_ctrl, uint8_t *data)
 {
 	int                               rc = 0;
 	int                               select_group = -1;
-	int                               try_num, read_data_offset;
+	int                               try_num, read_data_offset, pre_check_flag;
 
 	int                               retry_count = sc820cs_map_info.max_retry_num;
 	int                               page_count = sc820cs_map_info.page_num;
@@ -271,6 +287,7 @@ int oplus_cam_eeprom_sc820cs(struct cam_eeprom_ctrl_t *e_ctrl, uint8_t *data)
 		}
 
 		read_data_offset = 0;
+		pre_check_flag = 0;
 		for (int idx=0; idx < page_count; idx++) {
 			rc = sc820cs_page_load(e_ctrl, idx);
 			if (rc) {
@@ -286,6 +303,21 @@ int oplus_cam_eeprom_sc820cs(struct cam_eeprom_ctrl_t *e_ctrl, uint8_t *data)
 			}
 
 			read_data_offset += sc820cs_map_info.eeprom_page_map[idx].valid_size;
+
+			if(!pre_check_flag){
+				select_group = (idx / page_num_pergroup);
+				rc = sc820cs_flag_precheck(&sc820cs_otpdata[0]);
+				if (rc) {
+					read_data_offset = 0;
+					idx = (select_group + 1)* page_num_pergroup - 1;
+					memset(sc820cs_otpdata, 0, sizeof(sc820cs_otpdata));
+					CAM_ERR(CAM_EEPROM, "group[%d] flag check fail, read next group: start page[%d]", select_group, idx+1);
+					continue;
+				} else {
+					pre_check_flag = 1;
+					CAM_INFO(CAM_EEPROM, "group[%d] flag check success", select_group);
+				}
+			}
 
 			if((idx+1)%page_num_pergroup == 0){
 				select_group = (idx+1)/page_num_pergroup -1;

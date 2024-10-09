@@ -402,6 +402,27 @@ int iris_display_cmd_engine_enable(struct dsi_display *display)
 {
 	return dsi_display_cmd_engine_enable(display);
 }
+
+u32 iris_display_get_dsi_clk_rate(struct dsi_display *display)
+{
+	int rc = 0;
+	struct link_clk_freq link_freq;
+	u32 clk_rate_hz = 0;
+
+	rc = dsi_clk_get_link_frequencies(&link_freq, display->dsi_clk_handle,
+					display->clk_master_idx);
+
+	if (rc) {
+		DSI_ERR("Failed to get link frequencies\n");
+		return rc;
+	}
+
+	DSI_INFO("byte_clk_rate: %u pix_clk_rate: %u", link_freq.byte_clk_rate, link_freq.pix_clk_rate);
+
+	clk_rate_hz = link_freq.byte_clk_rate * 8;
+
+	return clk_rate_hz;
+}
 #endif
 
 #ifndef OPLUS_FEATURE_DISPLAY
@@ -1225,6 +1246,10 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 #ifdef OPLUS_FEATURE_DISPLAY
 	if (atomic_read(&panel->esd_pending)) {
 		DSI_WARN("Skip the check because esd is pending\n");
+		goto release_panel_lock;
+	}
+	if (panel->power_mode != SDE_MODE_DPMS_ON) {
+		DSI_WARN("Skip the check because panel power mode not power on!\n");
 		goto release_panel_lock;
 	}
 #endif /* OPLUS_FEATURE_DISPLAY */
@@ -5195,8 +5220,12 @@ static int dsi_display_dynamic_clk_configure_cmd(struct dsi_display *display,
 	}
 
 	if (clk_rate == display->cached_clk_rate) {
+#ifndef OPLUS_FEATURE_DISPLAY
 		DSI_INFO("%s: ignore duplicated DSI clk setting\n", __func__);
 		return rc;
+#else
+		DSI_INFO("%s: duplicated DSI clk setting, still set it\n", __func__);
+#endif
 	}
 
 	display->cached_clk_rate = clk_rate;

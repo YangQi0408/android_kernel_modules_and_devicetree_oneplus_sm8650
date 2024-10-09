@@ -105,6 +105,17 @@ oplus_chg-y += gauge_ic/oplus_optiga/SWI/Optiga_Auth.o
 oplus_chg-y += gauge_ic/oplus_optiga/SWI/Optiga_Nvm.o
 oplus_chg-y += gauge_ic/oplus_optiga/SWI/Optiga_Swi.o
 oplus_chg-y += gauge_ic/oplus_optiga/oplus_optiga.o
+oplus_chg-$(CONFIG_OPLUS_CHARGER_MAXIM) += gauge_ic/oplus_maxim/oplus_ds28e30/1wire_protocol.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/bignum.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/deep_cover_coproc_sw.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ds28e30.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ecc_generate_key.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ecdsa_generic_api.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ecdsa_high.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/sha256_stone.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ucl_rng.o \
+		gauge_ic/oplus_maxim/oplus_ds28e30/ucl_sha256.o \
+		gauge_ic/oplus_maxim/oplus_maxim.o
 oplus_chg-y += oplus_chg_core.o
 oplus_chg-y += oplus_chg_voter.o
 oplus_chg-y += oplus_chg_comm.o
@@ -258,7 +269,8 @@ oplus_chg-$(CONFIG_OPLUS_CHARGER_MTK6789S) += \
 		voocphy/oplus_voocphy.o \
 		charger_ic/oplus_battery_mtk6789S.o \
 		charger_ic/oplus_bq2589x_gki.o \
-		charger_ic/oplus_sgm41512.o
+		charger_ic/oplus_sgm41512.o \
+		charger_ic/oplus_sgm41542.o
 oplus_chg-$(CONFIG_OPLUS_CHARGER_MTK6835T) += \
 		charger_ic/oplus_usbtemp.o \
 		voocphy/oplus_voocphy.o \

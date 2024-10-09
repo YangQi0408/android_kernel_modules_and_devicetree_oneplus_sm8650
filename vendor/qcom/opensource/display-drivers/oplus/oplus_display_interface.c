@@ -995,14 +995,17 @@ int oplus_panel_cmdq_pack_handle(void *dsi_panel, enum dsi_cmd_set_type type, bo
 					cmd_set_prop_map[type]);
 			oplus_sde_early_wakeup(panel);
 			oplus_wait_for_vsync(panel);
-			if (panel->cur_mode->timing.refresh_rate == 60 || panel->cur_mode->timing.refresh_rate == 90) {
+			if (panel->cur_mode->timing.refresh_rate == 60 || panel->cur_mode->timing.refresh_rate == 90
+			|| (panel->cur_mode->timing.refresh_rate == 120 && panel->last_refresh_rate == 90)) {
 				oplus_need_to_sync_te(panel);
 			} else if (panel->cur_mode->timing.refresh_rate == 120) {
 				usleep_range(1000, 1020);
 			}
 		} else {
-			/* force cmdq sending during half-past frame */
-			oplus_need_to_sync_te(panel);
+			if (strcmp(panel->oplus_priv.vendor_name , "AB781")) {
+				/* force cmdq sending during half-past frame */
+				oplus_need_to_sync_te(panel);
+			}
 		}
 	} else {
 		panel->oplus_priv.cmdq_pack_state = true;

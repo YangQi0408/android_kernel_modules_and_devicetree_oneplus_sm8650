@@ -66,11 +66,11 @@ inline bool test_task_is_fair(struct task_struct *task)
 
 static DEFINE_PER_CPU(int, prev_locking_state);
 static DEFINE_PER_CPU(int, prev_locking_depth);
-static int expected_duration = NSEC_PER_USEC * 2000;
 
 #define LK_STATE_UNLOCK  (0)
 #define LK_STATE_LOCK    (1)
 #define LK_STATE_INVALID (2)
+#define LK_TICK_HIT_MAX  (2)
 void locking_state_systrace_c(unsigned int cpu, struct task_struct *p)
 {
 	struct oplus_task_struct *ots;
@@ -114,34 +114,27 @@ static inline bool task_inlock(struct oplus_task_struct *ots)
 	return ots->locking_start_time > 0;
 }
 
-static inline bool locking_protect_outtime(struct oplus_task_struct *ots, struct cfs_rq *rq)
+void locking_tick_hit(struct task_struct *prev, struct task_struct *next)
 {
-	struct task_struct *p;
-	int cpu;
+	struct oplus_task_struct *ots;
 
-	p = ots_to_ts(ots);
-	cpu = cpu_of(rq->rq);
-
-	if (unlikely(global_debug_enabled & DEBUG_SYSTRACE)) {
-		char buf[256];
-		snprintf(buf, sizeof(buf), "C|9999|Cpu%d_cur_exec_runtime|%lld\n",
-				cpu, p->se.sum_exec_runtime - p->se.prev_sum_exec_runtime);
-		tracing_mark_write(buf);
+	if (likely(prev != next)) {
+		ots = get_oplus_task_struct(prev);
+		if (!IS_ERR_OR_NULL(ots)) {
+			if (ots->lk_tick_hit >= LK_TICK_HIT_MAX)
+				ots->lk_tick_hit = 0;
+		}
 	}
-
-	return (time_after(jiffies, ots->locking_start_time) && ((p->se.sum_exec_runtime - p->se.prev_sum_exec_runtime) > expected_duration));
 }
 
-static inline void clear_locking_info(struct oplus_task_struct *ots)
+static inline bool locking_protect_outtime(struct oplus_task_struct *ots)
 {
-	ots->locking_start_time = 0;
+	return time_after(jiffies, ots->locking_start_time);
 }
-
 
 void enqueue_locking_thread(struct rq *rq, struct task_struct *p)
 {
 	struct oplus_task_struct *ots = NULL;
-	struct oplus_task_struct *tmp = NULL;
 	struct oplus_rq *orq = NULL;
 	struct list_head *pos, *n;
 	unsigned long irqflag;
@@ -172,14 +165,10 @@ void enqueue_locking_thread(struct rq *rq, struct task_struct *p)
 				exist = true;
 				break;
 			}
-			tmp = container_of(pos, struct oplus_task_struct, locking_entry);
-			if (tmp->locking_start_time < ots->locking_start_time) {
-				break;
-			}
 		}
 		if (!exist) {
 			get_task_struct(p);
-			list_add(&ots->locking_entry, pos);
+			list_add_tail(&ots->locking_entry, &orq->locking_thread_list);
 			orq->rq_locking_task++;
 			trace_enqueue_locking_thread(p, ots->locking_depth, orq->rq_locking_task);
 		}
@@ -323,10 +312,11 @@ void check_preempt_tick_locking(struct task_struct *p,
 	if (IS_ERR_OR_NULL(ots))
 		return;
 
-	if (task_inlock(ots)) {
-		if (locking_protect_outtime(ots, cfs_rq))
-			clear_locking_info(ots);
-	}
+	if (likely(0 == ots->locking_start_time))
+		return;
+	ots->lk_tick_hit++;
+	if (locking_protect_outtime(ots) && (ots->lk_tick_hit >= LK_TICK_HIT_MAX))
+		ots->locking_start_time = 0;
 }
 
 void check_preempt_wakeup_locking(struct rq *rq, struct task_struct *p,
@@ -478,7 +468,9 @@ static void update_locking_time(unsigned long time, bool in_cs)
 		return;
 
 set:
-	ots->locking_start_time = time;
+	if (ots->lk_tick_hit < LK_TICK_HIT_MAX) {
+		ots->locking_start_time = time;
+	}
 }
 
 static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock)
@@ -583,6 +575,7 @@ struct sched_assist_locking_ops sa_ops = {
 	.check_preempt_wakeup = check_preempt_wakeup_locking,
 	.state_systrace_c = locking_state_systrace_c,
 	.opt_ss_lock_contention = opt_ss_lock_contention,
+	.locking_tick_hit = locking_tick_hit,
 };
 
 int sched_assist_locking_init(void)

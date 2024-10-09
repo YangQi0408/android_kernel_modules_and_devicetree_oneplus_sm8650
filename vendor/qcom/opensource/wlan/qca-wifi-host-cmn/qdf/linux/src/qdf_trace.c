@@ -1499,6 +1499,18 @@ void qdf_dp_log_proto_pkt_info(uint8_t *sa, uint8_t *da, uint8_t type,
 	default:
 		break;
 	}
+
+	//add SAP/STA FW send M1/M2 fail monitor
+	switch (subtype) {
+	case QDF_PROTO_EAPOL_M1:
+	case QDF_PROTO_EAPOL_M2:
+		if (dir == QDF_TX) {
+			hostapd_send_eapol_uevent(type, subtype, status);
+		}
+		break;
+	default:
+		break;
+	}
 #endif /* OPLUS_FEATURE_SOFTAP_DCS_SWITCH */
 
 	if (status == QDF_TX_RX_STATUS_INVALID)

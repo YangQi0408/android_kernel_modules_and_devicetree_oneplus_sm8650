@@ -69,13 +69,14 @@ oplus_chg_v2-y += hal/oplus_virtual_platufcs.o
 oplus_chg_v2-y += mms/oplus_mms.o
 oplus_chg_v2-y += mms/oplus_mms_gauge.o
 oplus_chg_v2-y += mms/oplus_mms_wired.o
+oplus_chg_v2-y += mms/gauge/oplus_sili.o
 
 oplus_chg_v2-y += strategy/oplus_strategy.o
 oplus_chg_v2-y += strategy/oplus_strategy_cgcl.o
 oplus_chg_v2-y += strategy/oplus_strategy_pps_ufcs_curve.o
 oplus_chg_v2-y += strategy/oplus_strategy_low_curr_full.o
 oplus_chg_v2-y += strategy/oplus_strategy_pps_ufcs_curve_v2.o
-
+oplus_chg_v2-y += strategy/oplus_strategy_ddrc.o
 oplus_chg_v2-y += monitor/oplus_monitor_core.o
 oplus_chg_v2-y += monitor/oplus_chg_track.o
 oplus_chg_v2-y += monitor/oplus_chg_exception.o

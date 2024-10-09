@@ -5401,15 +5401,21 @@ static void bq8z610_deep_deinit(struct chip_bq27541 *chip)
 
 static int bq28z610_set_term_volt(struct chip_bq27541 *chip, int volt_mv)
 {
-	int rc = -1, value = 0;
+	int rc = -1, value = 0, main_value = 0, sub_value = 0;
 	u8 write_main[BQ28Z610_TERM_VOLT_SIZE] = { 0xBE, 0x45, (volt_mv * 2) & BQ28Z610_DEEP_DISCHG_CHECK,
 		(volt_mv * 2) >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
 	u8 write_sub[BQ28Z610_TERM_VOLT_SIZE] = { 0xC3, 0x45, volt_mv, volt_mv >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
 	u8 check_data[2] = { 0, BQ28Z610_TERM_VOLT_CHECK_SIZE };
 	u8 deep_read[BQ28Z610_DEEP_DISCHG_SIZE] = { 0, 0, 0, 0, 0 };
-	u8 deep_write[BQ28Z610_DEEP_DISCHG_SIZE] = { 0x82, 0x40, 0x08, 0, 0, 0,
+	u8 deep_write[BQ28Z610_DEEP_DISCHG_SIZE] = { 0x82, 0x40, 0x0b, 0, 0, 0,
 		(volt_mv * 2) & BQ28Z610_DEEP_DISCHG_CHECK, (volt_mv * 2) >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
 	u8 deep_check[2] = { 0, BQ28Z610_DEEP_DISCHG_CEHECK_SIZE };
+
+	bool value_check = false;
+	u8 read_main[BQ28Z610_TERM_VOLT_SIZE] = { 0xBE, 0x45, (volt_mv * 2) & BQ28Z610_DEEP_DISCHG_CHECK,
+		(volt_mv * 2) >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
+	u8 read_sub[BQ28Z610_TERM_VOLT_SIZE] = { 0xC3, 0x45, volt_mv, volt_mv >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
+
 
 	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
 		return rc;
@@ -5421,8 +5427,9 @@ static int bq28z610_set_term_volt(struct chip_bq27541 *chip, int volt_mv)
 
 	value = (deep_read[6] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + deep_read[5];
 
-	chg_info("[%d, %d][0x%x, 0x%x], [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n", value, volt_mv,
-			deep_read[0], deep_read[1], deep_read[2], deep_read[3], deep_read[4], deep_read[5], deep_read[6], deep_read[7]);
+	chg_info("[%d, %d][0x%x, 0x%x], [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n", value, volt_mv,
+			deep_read[0], deep_read[1], deep_read[2], deep_read[3], deep_read[4], deep_read[5], deep_read[6], deep_read[7],
+			deep_read[8], deep_read[9], deep_read[10]);
 
 	if ((value == volt_mv * 2) && (deep_read[7] == (BQ28Z610_DEEP_DISCHG_CHECK - (deep_read[5] + deep_read[6]) & BQ28Z610_DEEP_DISCHG_CHECK))) {
 		mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
@@ -5433,25 +5440,61 @@ static int bq28z610_set_term_volt(struct chip_bq27541 *chip, int volt_mv)
 	deep_write[4] = deep_read[3];
 	deep_write[5] = deep_read[4];
 	deep_write[8] = BQ28Z610_DEEP_DISCHG_CHECK - (deep_write[6] + deep_write[7]) & BQ28Z610_DEEP_DISCHG_CHECK;
+	deep_write[9] = deep_read[8];
+	deep_write[10] = deep_read[9];
+	deep_write[11] = deep_read[10];
 
 	if (!bq8z610_deep_init(chip)) {
 		mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
 		return rc;
 	}
+
+write_parameter:
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, deep_write);
 	usleep_range(1000, 1000);
 
 	deep_check[0] = BQ28Z610_DEEP_DISCHG_CHECK - (deep_write[0] + deep_write[1] + deep_write[2] + deep_write[3] + deep_write[4]
-	+ deep_write[5] + deep_write[6] + deep_write[7] + deep_write[8]) & BQ28Z610_DEEP_DISCHG_CHECK;
+	+ deep_write[5] + deep_write[6] + deep_write[7] + deep_write[8] + deep_write[9] + deep_write[10] + deep_write[11]) & BQ28Z610_DEEP_DISCHG_CHECK;
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, deep_check);
 	usleep_range(1000, 1000);
 
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_SIZE, write_main);
 	check_data[0] = BQ28Z610_DEEP_DISCHG_CHECK - (write_main[0] + write_main[1] + write_main[2] + write_main[3]) & BQ28Z610_DEEP_DISCHG_CHECK;
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, check_data);
+
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_SIZE, write_sub);
 	check_data[0] = BQ28Z610_DEEP_DISCHG_CHECK - (write_sub[0] + write_sub[1] + write_sub[2] + write_sub[3]) & BQ28Z610_DEEP_DISCHG_CHECK;
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, check_data);
+
+	if (value_check == false) {
+		bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
+		usleep_range(1000, 1000);
+		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, deep_read);
+		value = (deep_read[6] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + deep_read[5];
+
+		bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_CMD);
+		usleep_range(1000, 1000);
+		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_SIZE, read_main);
+		main_value = (read_main[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_main[2];
+
+		bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_S_CMD);
+		usleep_range(1000, 1000);
+		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_TERM_VOLT_SIZE, read_sub);
+		sub_value = (read_sub[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_sub[2];
+
+		if (rc < 0 || value != volt_mv * 2 ||
+			((deep_read[7] != (BQ28Z610_DEEP_DISCHG_CHECK - (deep_read[5] + deep_read[6]) & BQ28Z610_DEEP_DISCHG_CHECK))) ||
+			(((read_main[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_main[2]) != volt_mv * 2 ||
+			(((read_main[1] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_main[0]) != BQ28Z610_TERM_VOLT_CMD))||
+			(((read_sub[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_sub[2]) != volt_mv ||
+			(((read_sub[1] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_sub[0]) != BQ28Z610_TERM_VOLT_S_CMD))) {
+			value_check = true;
+			chg_info("deep_read[%d, %d][0x%x, 0x%x, 0x%x]main:0x%x[0x%x, 0x%x, 0x%x, 0x%x]sub:0x%x[0x%x, 0x%x, 0x%x, 0x%x]\n",
+				value, volt_mv, deep_read[5], deep_read[6], deep_read[7], main_value, read_main[0], read_main[1], read_main[2], read_main[3],
+				sub_value, read_sub[0], read_sub[1], read_sub[2], read_sub[3]);
+			goto write_parameter;
+		}
+	}
 
 	bq8z610_deep_deinit(chip);
 	mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
@@ -5465,8 +5508,10 @@ static int bq28z610_get_term_volt(struct chip_bq27541 *chip, int *volt)
 	int value = 0;
 	u8 read_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0 };
 
-	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
+	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561)) {
+		*volt = chip->deep_term_volt_pre;
 		return rc;
+	}
 
 	mutex_lock(&chip->bq28z610_alt_manufacturer_access);
 	bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
@@ -5476,11 +5521,12 @@ static int bq28z610_get_term_volt(struct chip_bq27541 *chip, int *volt)
 
 	value = (read_data[6] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[5];
 
-	chg_info("[0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x] volt=%d\n",
-		read_data[0], read_data[1], read_data[2], read_data[3],
-		read_data[4], read_data[5], read_data[6], read_data[7], value / 2);
+	chg_info("[0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x] volt=%d\n",
+		read_data[0], read_data[1], read_data[2], read_data[3], read_data[4], read_data[5],
+		read_data[6], read_data[7], read_data[8], read_data[9], read_data[10], value / 2);
 	if (read_data[7] == (BQ28Z610_DEEP_DISCHG_CHECK - (read_data[5] + read_data[6]) & BQ28Z610_DEEP_DISCHG_CHECK)) {
 		*volt = value / 2;
+		chip->deep_term_volt_pre = *volt;
 		rc = 0;
 	}
 
@@ -5489,12 +5535,12 @@ static int bq28z610_get_term_volt(struct chip_bq27541 *chip, int *volt)
 
 static int bq28z610_get_deep_dischg_num(struct chip_bq27541 *chip)
 {
-	int rc = 0;
 	int dischg_num = 0;
 	u8 read_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0, 0, 0, 0, 0 };
 
-	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
-		return rc;
+	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561)) {
+		return chip->deep_dischg_count_pre;
+	}
 
 	mutex_lock(&chip->bq28z610_alt_manufacturer_access);
 	bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
@@ -5503,22 +5549,26 @@ static int bq28z610_get_deep_dischg_num(struct chip_bq27541 *chip)
 	mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
 
 	dischg_num = (read_data[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[2];
-	chg_info("[0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n",
-			read_data[0], read_data[1], read_data[2], read_data[3], read_data[4], read_data[5], read_data[6], read_data[7]);
+	chg_info("[0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n",
+			read_data[0], read_data[1], read_data[2], read_data[3], read_data[4],
+			read_data[5], read_data[6], read_data[7], read_data[8], read_data[9], read_data[10]);
 
-	if (read_data[4] == (BQ28Z610_DEEP_DISCHG_CHECK - (read_data[2] + read_data[3]) & BQ28Z610_DEEP_DISCHG_CHECK))
+	if (read_data[4] == (BQ28Z610_DEEP_DISCHG_CHECK - (read_data[2] + read_data[3]) & BQ28Z610_DEEP_DISCHG_CHECK)) {
+		chip->deep_dischg_count_pre = dischg_num;
 		return dischg_num;
-	else
-		return 0;
+	} else {
+		return chip->deep_dischg_count_pre;
+	}
 }
 
 static int bq28z610_set_deep_dischg_num(struct chip_bq27541 *chip, int dischg_num)
 {
 	int rc = -1;
 	int value = 0;
-	u8 write_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0x82, 0x40, 0x08, dischg_num & BQ28Z610_DEEP_DISCHG_CHECK, dischg_num >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
+	u8 write_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0x82, 0x40, 0x0b, dischg_num & BQ28Z610_DEEP_DISCHG_CHECK, dischg_num >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
 	u8 read_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0, 0, 0, 0, 0 };
 	u8 check_data[2] = { 0, BQ28Z610_DEEP_DISCHG_CEHECK_SIZE };
+	bool value_check = false;
 
 	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
 		return rc;
@@ -5528,8 +5578,9 @@ static int bq28z610_set_deep_dischg_num(struct chip_bq27541 *chip, int dischg_nu
 	usleep_range(1000, 1000);
 	bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, read_data);
 
-	chg_info("[0x%x, 0x%x]  [0x%x, 0x%x, 0x%x] [0x%x, 0x%x, 0x%x]\n",
-		read_data[0], read_data[1], read_data[2], read_data[3], read_data[4], read_data[5], read_data[6], read_data[7]);
+	chg_info("[0x%x, 0x%x]  [0x%x, 0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n",
+		read_data[0], read_data[1], read_data[2], read_data[3], read_data[4],
+		read_data[5], read_data[6], read_data[7], read_data[8], read_data[9], read_data[10]);
 	value = (read_data[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[2];
 	if ((value == dischg_num) && (read_data[4] == (BQ28Z610_DEEP_DISCHG_CHECK - (read_data[2] + read_data[3]) & BQ28Z610_DEEP_DISCHG_CHECK))) {
 		mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
@@ -5545,20 +5596,137 @@ static int bq28z610_set_deep_dischg_num(struct chip_bq27541 *chip, int dischg_nu
 	write_data[6] = read_data[5];
 	write_data[7] = read_data[6];
 	write_data[8] = read_data[7];
+	write_data[9] = read_data[8];
+	write_data[10] = read_data[9];
+	write_data[11] = read_data[10];
 
-	chg_info("[0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n", write_data[3], write_data[4], write_data[5],
-		write_data[6], write_data[7], write_data[8]);
+	chg_info("[0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n", write_data[3], write_data[4], write_data[5],
+		write_data[6], write_data[7], write_data[8], write_data[9], write_data[10], write_data[11]);
+
+write_parameter:
 	rc = bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, write_data);
 	usleep_range(1000, 1000);
-	check_data[0] = BQ28Z610_DEEP_DISCHG_CHECK - (write_data[0] + write_data[1] + write_data[2] + write_data[3] + write_data[4]
-	+ write_data[5] + write_data[6] + write_data[7] + write_data[8]) & BQ28Z610_DEEP_DISCHG_CHECK;
-	rc = bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, check_data);
+	check_data[0] = BQ28Z610_DEEP_DISCHG_CHECK - (write_data[0] + write_data[1] + write_data[2] + write_data[3]
+		+ write_data[4] + write_data[5] + write_data[6] + write_data[7] + write_data[8] + write_data[9]
+		+ write_data[10] + write_data[11]) & BQ28Z610_DEEP_DISCHG_CHECK;
+	rc |= bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, check_data);
 	usleep_range(1000, 1000);
+
+
+	if (value_check == false) {
+		bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
+		usleep_range(1000, 1000);
+		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, read_data);
+		value = (read_data[3] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[2];
+		if (rc < 0 || value != dischg_num || ((read_data[4] != (BQ28Z610_DEEP_DISCHG_CHECK
+			- (read_data[2] + read_data[3]) & BQ28Z610_DEEP_DISCHG_CHECK)))) {
+			value_check = true;
+			goto write_parameter;
+		}
+	}
 
 	bq8z610_deep_deinit(chip);
 	mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
 
 	return rc;
+}
+
+static int bq28z610_set_last_cc(struct chip_bq27541 *chip, int cc)
+{
+	int rc = -1;
+	int value = 0;
+	u8 write_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0x82, 0x40, 0x0b, 0, 0, 0, 0, 0, 0,
+		cc & BQ28Z610_DEEP_DISCHG_CHECK, cc >> BQ28Z610_DEEP_DISCHG_SHIFT_MASK };
+	u8 read_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0, 0, 0, 0, 0 };
+	u8 check_data[2] = { 0, BQ28Z610_DEEP_DISCHG_CEHECK_SIZE };
+	bool cc_check = false;
+
+	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
+		return rc;
+
+	mutex_lock(&chip->bq28z610_alt_manufacturer_access);
+	bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
+	usleep_range(1000, 1000);
+	bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, read_data);
+
+	chg_info("[0x%x, 0x%x]  [0x%x, 0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n",
+		read_data[0], read_data[1], read_data[2], read_data[3], read_data[4], read_data[5],
+		read_data[6], read_data[7], read_data[8], read_data[9], read_data[10]);
+	value = (read_data[9] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[8];
+	if ((value == cc) && (read_data[10] == (BQ28Z610_DEEP_DISCHG_CHECK
+		- (read_data[8] + read_data[9]) & BQ28Z610_DEEP_DISCHG_CHECK))) {
+		mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
+		return rc;
+	}
+
+	if (!bq8z610_deep_init(chip)) {
+		mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
+		return rc;
+	}
+
+	write_data[3] = read_data[2];
+	write_data[4] = read_data[3];
+	write_data[5] = read_data[4];
+	write_data[6] = read_data[5];
+	write_data[7] = read_data[6];
+	write_data[8] = read_data[7];
+	write_data[11] = BQ28Z610_DEEP_DISCHG_CHECK - (write_data[9] + write_data[10]) & BQ28Z610_DEEP_DISCHG_CHECK;
+
+	chg_info("[0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n", write_data[3], write_data[4], write_data[5],
+		write_data[6], write_data[7], write_data[8], write_data[9], write_data[10], write_data[11]);
+
+write_parameter:
+	rc = bq27541_write_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, write_data);
+	usleep_range(1000, 1000);
+	check_data[0] = BQ28Z610_DEEP_DISCHG_CHECK - (write_data[0] + write_data[1] + write_data[2] + write_data[3]
+		+ write_data[4] + write_data[5] + write_data[6] + write_data[7] + write_data[8] + write_data[9]
+		+ write_data[10] + write_data[11]) & BQ28Z610_DEEP_DISCHG_CHECK;
+	rc |= bq27541_write_i2c_block(chip, BQ28Z610_TERM_VOLT_CHECK_ADDR, 2, check_data);
+	usleep_range(1000, 1000);
+
+	if (cc_check == false) {
+		bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
+		usleep_range(1000, 1000);
+		bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, read_data);
+		value = (read_data[9] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[8];
+		if (rc < 0 || value != cc || (read_data[10] != (BQ28Z610_DEEP_DISCHG_CHECK
+			- (read_data[8] + read_data[9]) & BQ28Z610_DEEP_DISCHG_CHECK))) {
+			cc_check = true;
+			goto write_parameter;
+		}
+	}
+
+	bq8z610_deep_deinit(chip);
+	mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
+
+	return rc;
+}
+
+static int bq28z610_get_last_cc(struct chip_bq27541 *chip)
+{
+	int cc = 0;
+	u8 read_data[BQ28Z610_DEEP_DISCHG_SIZE] = { 0, 0, 0, 0, 0 };
+
+	if (!chip || atomic_read(&chip->suspended) == 1 || (!chip->batt_bq28z610 && !chip->batt_bq27z561))
+		return chip->last_cc_pre;
+
+	mutex_lock(&chip->bq28z610_alt_manufacturer_access);
+	bq27541_i2c_txsubcmd(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_NAME_CMD);
+	usleep_range(1000, 1000);
+	bq27541_read_i2c_block(chip, BQ28Z610_REG_CNTL1, BQ28Z610_DEEP_DISCHG_SIZE, read_data);
+	mutex_unlock(&chip->bq28z610_alt_manufacturer_access);
+
+	cc = (read_data[9] << BQ28Z610_DEEP_DISCHG_SHIFT_MASK) + read_data[8];
+	chg_info("[0x%x, 0x%x] [0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x][0x%x, 0x%x, 0x%x]\n",
+			read_data[0], read_data[1], read_data[2], read_data[3], read_data[4], read_data[5],
+			read_data[6], read_data[7], read_data[8], read_data[9], read_data[10]);
+
+	if (read_data[10] == (BQ28Z610_DEEP_DISCHG_CHECK - (read_data[8] + read_data[9]) & BQ28Z610_DEEP_DISCHG_CHECK)) {
+		chip->last_cc_pre = cc;
+		return cc;
+	} else {
+		return chip->last_cc_pre;
+	}
 }
 
 static int oplus_get_batt_deep_dischg_count(struct oplus_chg_ic_dev *ic_dev, int *count)
@@ -5576,7 +5744,7 @@ static int oplus_get_batt_deep_dischg_count(struct oplus_chg_ic_dev *ic_dev, int
 	return 0;
 }
 
-static int oplus_sett_deep_dischg_count(struct oplus_chg_ic_dev *ic_dev, int *count)
+static int oplus_set_deep_dischg_count(struct oplus_chg_ic_dev *ic_dev, int *count)
 {
 	struct chip_bq27541 *chip;
 
@@ -5616,6 +5784,34 @@ static int oplus_get_deep_term_volt(struct oplus_chg_ic_dev *ic_dev, int *volt)
 	chip = oplus_chg_ic_get_drvdata(ic_dev);
 
 	rc = bq28z610_get_term_volt(chip, volt);
+	return rc;
+}
+
+static int oplus_set_last_cc(struct oplus_chg_ic_dev *ic_dev, int *cc)
+{
+	struct chip_bq27541 *chip;
+
+	if (ic_dev == NULL) {
+		chg_err("oplus_chg_ic_dev is NULL");
+		return -ENODEV;
+	}
+	chip = oplus_chg_ic_get_drvdata(ic_dev);
+	bq28z610_set_last_cc(chip, *cc);
+
+	return 0;
+}
+
+static int oplus_get_last_cc(struct oplus_chg_ic_dev *ic_dev, int *cc)
+{
+	struct chip_bq27541 *chip;
+	int rc = 0;
+
+	if (ic_dev == NULL) {
+		chg_err("oplus_chg_ic_dev is NULL");
+		return -ENODEV;
+	}
+	chip = oplus_chg_ic_get_drvdata(ic_dev);\
+	*cc = bq28z610_get_last_cc(chip);
 
 	return rc;
 }
@@ -7571,11 +7767,15 @@ static void *oplus_chg_get_func(struct oplus_chg_ic_dev *ic_dev,
 		break;
 	case OPLUS_IC_FUNC_GAUGE_SET_DEEP_DISCHG_COUNT:
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_SET_DEEP_DISCHG_COUNT,
-						  oplus_sett_deep_dischg_count);
+						  oplus_set_deep_dischg_count);
 		break;
 	case OPLUS_IC_FUNC_GAUGE_SET_DEEP_TERM_VOLT:
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_SET_DEEP_TERM_VOLT,
 						  oplus_set_deep_term_volt);
+		break;
+	case OPLUS_IC_FUNC_GAUGE_SET_LAST_CC:
+		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_SET_LAST_CC,
+						  oplus_set_last_cc);
 		break;
 	case OPLUS_IC_FUNC_GAUGE_GET_BATTID_INFO:
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_GET_BATTID_INFO,
@@ -7600,6 +7800,10 @@ static void *oplus_chg_get_func(struct oplus_chg_ic_dev *ic_dev,
 	case OPLUS_IC_FUNC_GAUGE_GET_DEEP_TERM_VOLT:
 		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_GET_DEEP_TERM_VOLT,
 					      oplus_get_deep_term_volt);
+		break;
+	case OPLUS_IC_FUNC_GAUGE_GET_LAST_CC:
+		func = OPLUS_CHG_IC_FUNC_CHECK(OPLUS_IC_FUNC_GAUGE_GET_LAST_CC,
+					      oplus_get_last_cc);
 		break;
 	default:
 		chg_err("this func(=%d) is not supported\n", func_id);

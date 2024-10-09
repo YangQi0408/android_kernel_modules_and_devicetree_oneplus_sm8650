@@ -220,7 +220,7 @@ static void _iris_dsc_parse_info(void)
 
 static void _iris_dsc_init_param(void)
 {
-	IRIS_LOGI("%s()", __func__);
+	IRIS_LOGD("%s()", __func__);
 
 	iris_dsc_active_path = DSC_PPS_SET_CNT;
 }
@@ -1485,7 +1485,7 @@ static void _iris_scl_reset_datapath(void)
 	struct iris_cfg *pcfg = iris_get_cfg();
 	uint32_t *payload = NULL;
 
-	IRIS_LOGI("%s()", __func__);
+	IRIS_LOGD("%s()", __func__);
 
 	payload = iris_get_ipopt_payload_data(IRIS_IP_PWIL, 0x01, 4);
 	if (payload == NULL) {
@@ -1622,7 +1622,7 @@ static void _iris_scl_reset_seq(void)
 
 static void _iris_scl_init_param(void)
 {
-	IRIS_LOGI("%s()", __func__);
+	IRIS_LOGD("%s()", __func__);
 
 	_iris_scl_reset_datapath();
 	_iris_scl_reset_param();
