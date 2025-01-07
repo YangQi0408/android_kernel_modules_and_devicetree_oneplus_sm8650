@@ -178,7 +178,7 @@ int read_signed_temp_region_data(struct device_node *node, const char *prop_str,
 					    int col, int col_max, int row, int (*col_map)(int));
 void oplus_comm_set_rechg_soc_limit(struct oplus_mms *topic, int rechg_soc, bool en);
 void oplus_comm_get_rechg_soc_limit(struct oplus_mms *topic, int *rechg_soc, bool *en);
-int oplus_set_chg_up_limit(int charge_limit_enable, int charge_limit_value,
+int oplus_set_chg_up_limit(struct oplus_mms *topic, int charge_limit_enable, int charge_limit_value,
     int is_force_set_charge_limit, int charge_limit_recharge_value, int callname);
 void oplus_comm_set_anti_expansion_status(struct oplus_mms *topic,int val);
 int oplus_comm_get_dis_ui_power_state(struct oplus_mms *topic);

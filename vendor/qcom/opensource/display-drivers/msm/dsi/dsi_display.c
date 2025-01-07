@@ -283,7 +283,10 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 	panel = dsi_display->panel;
-
+#ifdef OPLUS_FEATURE_DISPLAY
+	/* DSI Command mode panel need panel_lock when send cmd */
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
+#endif
 	mutex_lock(&panel->panel_lock);
 	if (!dsi_panel_initialized(panel)) {
 		rc = -EINVAL;
@@ -332,6 +335,10 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 		DSI_ERR("unable to set backlight\n");
 
 error:
+#ifdef OPLUS_FEATURE_DISPLAY
+	/* DSI Command mode panel need panel_lock when send cmd */
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
+#endif
 	mutex_unlock(&panel->panel_lock);
 
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
@@ -1216,7 +1223,10 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 		oplus_temp_compensation_temp_check(display);
 	}
 #endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
-
+#ifdef OPLUS_FEATURE_DISPLAY
+	/* DSI Command mode panel need panel_lock when send cmd */
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
+#endif
 	dsi_panel_acquire_panel_lock(panel);
 
 	if (!panel->panel_initialized) {
@@ -1296,6 +1306,10 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 
 	dsi_display_clk_ctrl(dsi_display->dsi_clk_handle, DSI_ALL_CLKS, DSI_CLK_OFF);
 release_panel_lock:
+#ifdef OPLUS_FEATURE_DISPLAY
+	/* DSI Command mode panel need panel_lock when send cmd */
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
+#endif
 	dsi_panel_release_panel_lock(panel);
 	SDE_EVT32(SDE_EVTLOG_FUNC_EXIT, rc);
 

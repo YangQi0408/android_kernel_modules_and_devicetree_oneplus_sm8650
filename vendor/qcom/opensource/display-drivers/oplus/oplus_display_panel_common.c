@@ -1325,17 +1325,14 @@ int oplus_display_panel_get_cabc_status(void *buf)
 	}
 	panel = display->panel;
 
-	mutex_lock(&display->display_lock);
 	mutex_lock(&panel->panel_lock);
-
 	if(panel->oplus_priv.cabc_enabled) {
 		*cabc_status = oplus_cabc_status;
 	} else {
 		*cabc_status = OPLUS_DISPLAY_CABC_OFF;
 	}
-
 	mutex_unlock(&panel->panel_lock);
-	mutex_unlock(&display->display_lock);
+
 	LCD_INFO("Get cabc status: %d\n", *cabc_status);
 
 	return rc;
@@ -1373,24 +1370,19 @@ int oplus_display_panel_set_cabc_status(void *buf)
 		rc = -EFAULT;
 		return rc;
 	}
-
-	LCD_INFO("Set cabc status: %d, buf=[%s]\n", *cabc_status, buf);
-	mutex_lock(&display->display_lock);
-	mutex_lock(&panel->panel_lock);
-
 	if (*cabc_status == oplus_cabc_status) {
-		LCD_INFO("cabc status(%d) no changed! skip setting!\n", *cabc_status);
-		mutex_unlock(&panel->panel_lock);
-		mutex_unlock(&display->display_lock);
+		LCD_DEBUG("cabc status(%d) no changed! skip setting!\n", *cabc_status);
 		return rc;
 	}
 
+	LCD_INFO("Set cabc status: %d, cur status: %d\n", *cabc_status, oplus_cabc_status);
+	SDE_ATRACE_BEGIN("set_cabc_status");
+	mutex_lock(&panel->panel_lock);
 	cmd_index = DSI_CMD_CABC_OFF + *cabc_status;
 	rc = dsi_panel_tx_cmd_set(panel, cmd_index, false);
 	oplus_cabc_status = *cabc_status;
-
 	mutex_unlock(&panel->panel_lock);
-	mutex_unlock(&display->display_lock);
+	SDE_ATRACE_END("set_cabc_status");
 
 	return rc;
 }

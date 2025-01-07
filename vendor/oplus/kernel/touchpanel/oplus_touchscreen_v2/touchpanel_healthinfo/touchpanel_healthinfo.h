@@ -89,7 +89,7 @@ typedef enum {
 	HEALTH_RAW_TOUCH,
 	HEALTH_GRIP_RECLINING,
 	HEALTH_IRQ_TYPE,
-	HEALTH_SET_GESTURE_IN_SUSPEND,
+	HEALTH_GLOVE,
 } healthinfo_type;
 
 void reset_healthinfo_time_counter(u64 *time_counter);

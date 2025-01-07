@@ -211,7 +211,7 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 #ifdef OPLUS_FEATURE_DISPLAY
 	oplus_panel_switch_vid_mode(c_bridge->display, &(c_bridge->dsi_mode));
 #endif
-
+	SDE_ATRACE_BEGIN("dsi_display_set_mode");
 	/* By this point mode should have been validated through mode_fixup */
 	rc = dsi_display_set_mode(c_bridge->display,
 			&(c_bridge->dsi_mode), 0x0);
@@ -220,7 +220,7 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		       c_bridge->id, rc);
 		return;
 	}
-
+	SDE_ATRACE_END("dsi_display_set_mode");
 	if (c_bridge->dsi_mode.dsi_mode_flags &
 		(DSI_MODE_FLAG_SEAMLESS | DSI_MODE_FLAG_VRR |
 		 DSI_MODE_FLAG_DYN_CLK)) {

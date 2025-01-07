@@ -2282,6 +2282,7 @@ static int dsi_panel_parse_panel_mode(struct dsi_panel *panel)
 
 	panel->panel_ack_disabled = utils->read_bool(utils->data,
 					"qcom,panel-ack-disabled");
+	panel->peripheral_flush_ongoing = false;
 error:
 	return rc;
 }
@@ -5340,7 +5341,12 @@ int dsi_panel_get_host_cfg_for_mode(struct dsi_panel *panel,
 		return -EINVAL;
 	}
 
-	mutex_lock(&panel->panel_lock);
+	if (panel->peripheral_flush_ongoing) {
+		panel->peripheral_flush_ongoing = false;
+		SDE_EVT32(SDE_EVTLOG_FUNC_CASE2);
+	} else {
+		mutex_lock(&panel->panel_lock);
+	}
 
 	config->panel_mode = panel->panel_mode;
 	memcpy(&config->common_config, &panel->host_config,
@@ -5788,7 +5794,12 @@ int dsi_panel_send_cmd(struct dsi_panel *panel,
 		DSI_ERR("[%s] failed to send cmd type %x rc=%d\n",
 		       panel->name, type, rc);
 
-	mutex_unlock(&panel->panel_lock);
+	if (peripheral_flush) {
+		panel->peripheral_flush_ongoing = true;
+		SDE_EVT32(SDE_EVTLOG_FUNC_CASE1);
+	} else {
+		mutex_unlock(&panel->panel_lock);
+	}
 
 	return rc;
 }

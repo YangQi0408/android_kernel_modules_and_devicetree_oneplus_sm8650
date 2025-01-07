@@ -395,6 +395,7 @@ struct dsi_panel {
 	bool panel_ack_disabled;
 
 	struct mutex panel_lock;
+	bool peripheral_flush_ongoing;
 	struct drm_panel drm_panel;
 	struct mipi_dsi_host *host;
 	struct device *parent;

@@ -1831,13 +1831,30 @@ int tp_reclining_healthinfo_handle(struct monitor_data *monitor_data,
 	return 0;
 }
 
-static int tp_reset_gesture_healthinfo_handle(struct monitor_data *monitor_data, int status)
+static int tp_glove_healthinfo_handle(struct monitor_data *monitor_data, int status)
 {
+	u64 glove_en_time = 0;
+
 	if (!monitor_data) {
-        return 0;
-    }
-	if (status > 0) {
-		monitor_data->set_gesture_after_nvt_reset_in_suspend ++;
+		return 0;
+	}
+
+	switch (status) {
+	case GLOVE_ENTER:
+		monitor_data->glove_enter_count++;
+		reset_healthinfo_time_counter(&monitor_data->glove_en_timer);
+		update_value_count_list(&monitor_data->health_report_list,
+			HEALTH_REPORT_GLOVE_ENTER, TYPE_RECORD_STR);
+		break;
+
+	case GLOVE_EXIT:
+		glove_en_time = monitor_data->glove_en_timer ?
+			check_healthinfo_time_counter_timeout(monitor_data->glove_en_timer, 0) : 0;
+		monitor_data->total_glove_en_time += glove_en_time;
+		monitor_data->glove_en_timer = 0;
+		break;
+	default:
+		break;
 	}
 
 	return 0;
@@ -1969,8 +1986,8 @@ int tp_healthinfo_report(void *tp_monitor_data, healthinfo_type type,
 		ret = tp_irq_type_healthinfo_handle(monitor_data, *value_u32);
 		break;
 
-	case HEALTH_SET_GESTURE_IN_SUSPEND:
-		ret = tp_reset_gesture_healthinfo_handle(monitor_data, *value_int);
+	case HEALTH_GLOVE:
+		ret = tp_glove_healthinfo_handle(monitor_data, *value_int);
 		break;
 
 	default:
@@ -1988,6 +2005,7 @@ int tp_healthinfo_read(struct seq_file *s, void *tp_monitor_data)
 	struct monitor_data *monitor_data = (struct monitor_data *)tp_monitor_data;
 	int *vc_value = NULL;
 	u64 screenon_time = 0;
+	u64 glove_en_time = 0;
 	struct grip_monitor_data  *grip = NULL;
 	struct irq_type_count  *irq_type = NULL;
 
@@ -2016,7 +2034,6 @@ int tp_healthinfo_read(struct seq_file *s, void *tp_monitor_data)
 	seq_printf(s, "max_suspend_time:%lldms\n", monitor_data->max_suspend_time);
 	seq_printf(s, "RATE_MIN:%d\n", monitor_data->RATE_MIN);
 	seq_printf(s, "below_rate_counts:%d\n", monitor_data->below_rate_counts);
-	seq_printf(s, "set_gesture_after_nvt_reset_in_suspend:%d\n", monitor_data->set_gesture_after_nvt_reset_in_suspend);
 
 	/*touch time rate*/
 	screenon_time = monitor_data->screenon_timer ?
@@ -2025,6 +2042,10 @@ int tp_healthinfo_read(struct seq_file *s, void *tp_monitor_data)
 		   (monitor_data->total_screenon_time + screenon_time) / MS_PER_SECOND);
 	seq_printf(s, "total_touch_time:%llds\n",
 		   monitor_data->total_touch_time / MS_PER_SECOND);
+
+	glove_en_time = monitor_data->glove_en_timer ? check_healthinfo_time_counter_timeout(monitor_data->glove_en_timer, 0) : 0;
+	seq_printf(s, "glove_enterDuration:%llds\n",
+			(monitor_data->total_glove_en_time + glove_en_time) / MS_PER_SECOND);
 
 	if (monitor_data->total_touch_time_in_game[0]) {
 		seq_printf(s,
@@ -2605,6 +2626,10 @@ int tp_healthinfo_clear(void *tp_monitor_data)
 	monitor_data->max_touch_num_in_game = 0;
 	monitor_data->click_count = 0;
 	monitor_data->swipe_count = 0;
+
+	reset_healthinfo_time_counter(&monitor_data->glove_en_timer);
+	monitor_data->glove_enter_count = 0;
+	monitor_data->total_glove_en_time = 0;
 
 	/*clear_delta_data(monitor_data->click_count_array, CLICK_COUNT_ARRAY_HEIGHT, CLICK_COUNT_ARRAY_WIDTH);*/
 

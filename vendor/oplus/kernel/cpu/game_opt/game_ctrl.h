@@ -11,11 +11,13 @@
 #include <kernel/sched/sched.h>
 
 #define MAX_TID_COUNT 256
-#define MAX_TASK_NR 15
+#define MAX_TASK_NR 18
 #define RESULT_PAGE_SIZE 1024
 
 extern struct proc_dir_entry *game_opt_dir;
 extern struct proc_dir_entry *early_detect_dir;
+
+extern pid_t game_pid;
 
 extern atomic_t have_valid_game_pid;
 extern atomic_t have_valid_render_pid;

@@ -136,6 +136,11 @@ int dsi_display_seed_mode_lock(struct dsi_display *display, int mode)
 		return -EINVAL;
 	}
 
+	if (display->config.panel_mode == DSI_OP_VIDEO_MODE) {
+		LCD_WARN("seed is not support in vdo mode\n");
+		return rc;
+	}
+
 	mutex_lock(&display->display_lock);
 	mutex_lock(&display->panel->panel_lock);
 
