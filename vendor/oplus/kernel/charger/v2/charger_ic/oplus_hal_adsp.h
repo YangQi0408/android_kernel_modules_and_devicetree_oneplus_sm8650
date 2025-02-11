@@ -632,6 +632,7 @@ struct battery_chg_dev {
 	struct delayed_work	oem_lcm_en_check_work;
 	struct delayed_work	ctrl_lcm_frequency;
 	struct delayed_work	sourcecap_done_work;
+	struct delayed_work	sourcecap_suspend_recovery_work;
 	u32			oem_misc_ctl_data;
 	bool			oem_usb_online;
 	bool			oem_lcm_check;
