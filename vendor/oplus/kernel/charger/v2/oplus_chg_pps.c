@@ -309,7 +309,6 @@ struct oplus_pps {
 	struct mutex read_lock;
 	struct mutex cmd_data_lock;
 	struct completion cmd_ack;
-	struct completion pd_svooc_wait_ack;
 	struct pps_dev_cmd cmd;
 	bool cmd_data_ok;
 
@@ -1407,16 +1406,6 @@ static void oplus_pps_switch_check_work(struct work_struct *work)
 			return;
 		}
 	}
-	chg_err("start pd_svooc wait\n");
-	reinit_completion(&chip->pd_svooc_wait_ack);
-	rc = wait_for_completion_timeout(&chip->pd_svooc_wait_ack, msecs_to_jiffies(200));
-	if (rc) {
-			chg_err("pd_svooc now\n");
-			oplus_cpa_switch_end(chip->cpa_topic, CHG_PROTOCOL_PPS);
-			return;
-		} else {
-			chg_err("pd_svooc wait timeout\n");
-		}
 
 	oplus_pps_switch_to_normal(chip);
 	oplus_pps_set_charging(chip, false);
@@ -3566,10 +3555,6 @@ static void oplus_pps_wired_subs_callback(struct mms_subscribe *subs,
 			oplus_mms_get_item_data(chip->wired_topic, id, &data,
 						false);
 			chip->pdsvooc_id_adapter = !!data.intval;
-			if (chip->pdsvooc_id_adapter) {
-				chg_err("pd_svooc, complete wait\n");
-				complete(&chip->pd_svooc_wait_ack);
-			}
 			break;
 		case WIRED_ITEM_PRESENT:
 			oplus_mms_get_item_data(chip->wired_topic, id, &data, false);
@@ -4675,6 +4660,13 @@ static int oplus_pps_parse_charge_strategy(struct oplus_pps *chip)
 		 low_curr_temp_tmp[0], low_curr_temp_tmp[1],
 		 low_curr_temp_tmp[2], low_curr_temp_tmp[3]);
 
+	rc = of_property_read_u32(node, "oplus,pps_low_temp", &chip->limits.pps_low_temp);
+	if (rc < 0) {
+		chip->limits.pps_low_temp = rang_temp_tmp[0];
+	} else {
+		chip->limits.pps_batt_over_low_temp = chip->limits.pps_low_temp - PPS_COLD_TEMP_RANGE_THD;
+		chg_info("oplus,pps_low_temp is %d %d\n", chip->limits.pps_low_temp, chip->limits.pps_batt_over_low_temp);
+	}
 	return rc;
 }
 
@@ -4993,7 +4985,6 @@ static int oplus_pps_misc_dev_reg(struct oplus_pps *chip)
 	init_waitqueue_head(&chip->read_wq);
 	chip->cmd_data_ok = false;
 	init_completion(&chip->cmd_ack);
-	init_completion(&chip->pd_svooc_wait_ack);
 
 	chip->misc_dev.minor = MISC_DYNAMIC_MINOR;
 	chip->misc_dev.name = "pps_dev";

@@ -18,6 +18,10 @@ enum votable_type {
 	NUM_VOTABLE_TYPES,
 };
 
+#define PLC_VOTER		"PLC_VOTER"
+#define PLC_RETRY_VOTER		"PLC_RETRY_VOTER"
+#define PLC_SOC_VOTER		"PLC_SOC_VOTER"
+
 #define OVERRIDE_VOTER		"OVERRIDE_VOTER"
 #define JEITA_VOTER		"JEITA_VOTER"
 #define STEP_VOTER		"STEP_VOTER"
@@ -122,6 +126,7 @@ enum votable_type {
 #define SUPER_ENDURANCE_MODE_VOTER	"SUPER_ENDURANCE_MODE_VOTER"
 #define DEEP_COUNT_VOTER	"DEEP_COUNT_VOTER"
 #define SUB_DEEP_COUNT_VOTER	"SUB_DEEP_COUNT_VOTER"
+#define BOOST_VOTER		"BOOST_VOTER"
 #define CP_ERR_VOTER		"CP_ERR_VOTER"
 #define BAL_STATE_VOTER		"BAL_STATE_VOTER"
 #define BATT_BAL_VOTER		"BATT_BAL_VOTER"
@@ -146,7 +151,6 @@ enum votable_type {
 #define VOOC_TOPIC_VOTER	"VOOC_TOPIC_VOTER"
 #define UFCS_TOPIC_VOTER	"UFCS_TOPIC_VOTER"
 #define CPA_TOPIC_VOTER		"CPA_TOPIC_VOTER"
-#define USB_PSY_VOTER		"USB_PSY_VOTER"
 
 bool is_client_vote_enabled(struct votable *votable, const char *client_str);
 bool is_client_vote_enabled_locked(struct votable *votable,

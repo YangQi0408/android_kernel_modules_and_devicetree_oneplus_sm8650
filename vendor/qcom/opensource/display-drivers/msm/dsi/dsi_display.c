@@ -285,9 +285,12 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 	panel = dsi_display->panel;
 #ifdef OPLUS_FEATURE_DISPLAY
 	/* DSI Command mode panel need panel_lock when send cmd */
-	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
-#endif
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE) {
+		mutex_lock(&panel->panel_lock);
+	}
+#else
 	mutex_lock(&panel->panel_lock);
+#endif
 	if (!dsi_panel_initialized(panel)) {
 		rc = -EINVAL;
 		goto error;
@@ -337,9 +340,12 @@ int dsi_display_set_backlight(struct drm_connector *connector,
 error:
 #ifdef OPLUS_FEATURE_DISPLAY
 	/* DSI Command mode panel need panel_lock when send cmd */
-	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
-#endif
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE) {
+		mutex_unlock(&panel->panel_lock);
+	}
+#else
 	mutex_unlock(&panel->panel_lock);
+#endif
 
 #ifdef OPLUS_FEATURE_DISPLAY_ADFR
 	oplus_adfr_sa_mode_restore(dsi_display);
@@ -1225,10 +1231,12 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 #endif /* OPLUS_FEATURE_DISPLAY_TEMP_COMPENSATION */
 #ifdef OPLUS_FEATURE_DISPLAY
 	/* DSI Command mode panel need panel_lock when send cmd */
-	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
-#endif
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE) {
+		dsi_panel_acquire_panel_lock(panel);
+	}
+#else
 	dsi_panel_acquire_panel_lock(panel);
-
+#endif
 	if (!panel->panel_initialized) {
 		DSI_DEBUG("Panel not initialized\n");
 		goto release_panel_lock;
@@ -1308,9 +1316,12 @@ int dsi_display_check_status(struct drm_connector *connector, void *display,
 release_panel_lock:
 #ifdef OPLUS_FEATURE_DISPLAY
 	/* DSI Command mode panel need panel_lock when send cmd */
-	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE)
-#endif
+	if (dsi_display->config.panel_mode == DSI_OP_CMD_MODE) {
+		dsi_panel_release_panel_lock(panel);
+	}
+#else
 	dsi_panel_release_panel_lock(panel);
+#endif
 	SDE_EVT32(SDE_EVTLOG_FUNC_EXIT, rc);
 
 	return rc;

@@ -93,9 +93,8 @@ static bool is_common_topic_available(struct battery_chg_dev *bcdev);
 static bool oplus_get_ufcs_charging(struct battery_chg_dev *bcdev);
 __maybe_unused static bool oplus_get_pps_charging(struct battery_chg_dev *bcdev);
 static int oplus_chg_set_input_current(struct battery_chg_dev *bcdev, int current_ma);
-#endif /*OPLUS_FEATURE_CHG_BASIC*/
-
 static int oplus_get_pps_info_from_adsp(struct oplus_chg_ic_dev *ic_dev, u32 *pdo, int num);
+#endif /*OPLUS_FEATURE_CHG_BASIC*/
 
 #ifdef OPLUS_FEATURE_CHG_BASIC
 /*for p922x compile*/
@@ -1385,7 +1384,7 @@ static void oplus_sourcecap_done_work(struct work_struct *work)
 	int max_pdo_current = 0;
 	int rc = 0;
 
-	rc = oplus_get_pps_info_from_adsp(bcdev->buck_ic, (u32*)bcdev->pdo, PPS_PDO_MAX);
+	rc = oplus_get_pps_info_from_adsp(bcdev->buck_ic, (u32 *)bcdev->pdo, PPS_PDO_MAX);
 	if (rc < 0) {
 		chg_err("get pdo info error\n");
 		return;
@@ -8595,6 +8594,23 @@ oplus_sm8350_get_battery_gauge_type_for_bcc(struct oplus_chg_ic_dev *ic_dev,
 	return 0;
 }
 
+static int
+oplus_sm8350_get_real_time_current(struct oplus_chg_ic_dev *ic_dev,
+				       int *val)
+{
+	struct battery_chg_dev *bcdev;
+
+	if ((ic_dev == NULL) || (val == NULL)) {
+		chg_err("!!!ic_dev null\n");
+		return -ENODEV;
+	}
+
+	bcdev = oplus_chg_ic_get_drvdata(ic_dev);
+	*val = bcdev->bcc_read_buffer_dump.data_buffer[8];
+
+	return 0;
+}
+
 static int oplus_sm8350_get_reg_info(struct oplus_chg_ic_dev *ic_dev, u8 *info, int len)
 {
 	struct battery_chg_dev *bcdev;
@@ -9200,6 +9216,11 @@ static void *oplus_chg_8350_gauge_get_func(struct oplus_chg_ic_dev *ic_dev,
 			OPLUS_IC_FUNC_GAUGE_GET_BATT_CURR,
 			oplus_sm8350_get_batt_curr);
 		break;
+	case OPLUS_IC_FUNC_GAUGE_GET_REAL_TIME_CURR:
+		func = OPLUS_CHG_IC_FUNC_CHECK(
+			OPLUS_IC_FUNC_GAUGE_GET_REAL_TIME_CURR,
+			oplus_sm8350_get_real_time_current);
+		break;
 	case OPLUS_IC_FUNC_GAUGE_GET_BATT_TEMP:
 		func = OPLUS_CHG_IC_FUNC_CHECK(
 			OPLUS_IC_FUNC_GAUGE_GET_BATT_TEMP,
@@ -9596,6 +9617,11 @@ static void *oplus_chg_adsp_cp_get_func(struct oplus_chg_ic_dev *ic_dev, enum op
 	if (!ic_dev->online && (func_id != OPLUS_IC_FUNC_INIT) &&
 	    (func_id != OPLUS_IC_FUNC_EXIT)) {
 		chg_err("%s is offline\n", ic_dev->name);
+		return NULL;
+	}
+
+	if (!oplus_chg_ic_func_is_support(ic_dev, func_id)) {
+		chg_info("%s: this func(=%d) is not supported\n", ic_dev->name, func_id);
 		return NULL;
 	}
 

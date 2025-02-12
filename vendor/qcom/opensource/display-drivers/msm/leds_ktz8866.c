@@ -352,6 +352,11 @@ static int ktz8866_i2c_master_probe(struct i2c_client *client, const struct i2c_
 		bl_ic_ktz8866_hw_en(false);
 		bl_ic_ktz8866_set_lcd_bias_by_gpio(false);
 	}
+	/* oplus_is_silence_reboot no need ktz8866 backlight */
+	if (oplus_is_silence_reboot()) {
+		bl_ic_ktz8866_set_brightness(0);
+		pr_info("Diable ktz8866 backlight as SAU boot");
+	}
 
 	pr_err("[LCD]%s:get g_i2c_m_client SUCC!\n", __func__);
 

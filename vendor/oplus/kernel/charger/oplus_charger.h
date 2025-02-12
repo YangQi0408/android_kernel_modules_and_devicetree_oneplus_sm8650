@@ -10,6 +10,9 @@
 #include <linux/workqueue.h>
 #include <linux/version.h>
 #include <linux/thermal.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(6, 6, 0))
+#include <linux/pinctrl/consumer.h>
+#endif
 #include "oplus_chg_core.h"
 #if __and(IS_MODULE(CONFIG_OPLUS_CHG), IS_MODULE(CONFIG_OPLUS_CHG_V2))
 #include "oplus_chg_symbol.h"
@@ -158,7 +161,9 @@
 #include "charger_ic/oplus_battery_sm8350.h"
 #elif defined CONFIG_OPLUS_SM8450_CHARGER
 #include "charger_ic/oplus_battery_sm8450.h"
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 #define PLATFORM_SUPPORT_TIMESPEC 1
+#endif
 #elif defined CONFIG_OPLUS_SM8550_CHARGER
 #include "charger_ic/oplus_battery_sm8550.h"
 #elif defined OPLUS_CHG_SEPARATE_MUSE
@@ -359,6 +364,7 @@ static inline void getnstimeofday(struct timespec *ts)
 #define NOTIFY_ALLOW_READING_ERR		26
 #define NOTIFY_ANTI_EXPANSION_WARNING		28
 #define NOTIFY_ANTI_EXPANSION_ERROR		29
+#define NOTIFY_FASTCHG_CHECK_FAIL		30
 
 #define OPLUS_CHG_500_CHARGING_CURRENT	500
 #define OPLUS_CHG_900_CHARGING_CURRENT	900
@@ -1120,6 +1126,9 @@ struct oplus_chg_chip {
 	atomic_t mos_lock;
 	int mos_test_result;
 	bool mos_test_started;
+	bool fastchg_check_first_time;
+	long check_time_sec;
+	int non_standard_chg_switch;
 
 	int alarm_clockid;
 	bool usbtemp_wq_init_finished;
@@ -1425,6 +1434,7 @@ struct oplus_chg_chip {
 	bool support_3p6_standard;
 	bool pdqc_9v_voltage_adaptive;
 	bool suport_pd_9v2a;
+	bool support_nomal_5v3a;
 	struct timespec quick_mode_time;
 	int start_time;
 	int quick_mode_start_time;
