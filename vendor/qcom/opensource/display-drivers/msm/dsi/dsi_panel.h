@@ -258,6 +258,10 @@ struct dsi_panel_oplus_privite {
 	bool dimming_setting_before_bl_0_enable;
 	bool vidmode_backlight_async_wait_enable;
 	bool set_backlight_not_do_esd_reg_read_enable;
+	bool gamma_compensation_support;
+	/* indicates how many frames cost from aod off cmd sent to normal frame,
+	"0" means once aod off cmd sent the next frame will be normal frame */
+	unsigned int aod_off_frame_cost;
 };
 
 struct dsi_panel_oplus_serial_number {

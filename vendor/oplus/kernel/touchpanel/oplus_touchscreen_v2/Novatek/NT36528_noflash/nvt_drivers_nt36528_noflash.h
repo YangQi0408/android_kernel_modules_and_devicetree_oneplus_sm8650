@@ -108,7 +108,7 @@
 #define NVT_DUMP_SRAM   (0)
 
 #define SPI_TANSFER_LENGTH 256
-#define NVT_TRANSFER_LEN (63*1024)
+#define NVT_TRANSFER_LEN (15*1024)
 
 #define XDATA_SECTOR_SIZE       256
 #define NORMAL_MODE             0x00

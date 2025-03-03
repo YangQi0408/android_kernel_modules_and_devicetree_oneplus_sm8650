@@ -1790,6 +1790,20 @@ close_time:
 }
 #endif /* CONFIG_OPLUS_RTC_DET_SUPPORT */
 
+int sy6974b_oplus_check_cc_mode(void)
+{
+	const char *tcpc_name = "type_c_port0";
+	struct tcpc_device *tcpc_dev;
+
+	tcpc_dev = tcpc_dev_get_by_name(tcpc_name);
+	if (IS_ERR_OR_NULL(tcpc_dev)) {
+		chg_err("tcpc info error\n");
+		return -EINVAL;
+	}
+
+	return tcpm_inquire_typec_role(tcpc_dev);
+}
+
 void sy6974b_vooc_timeout_callback(bool vbus_rising)
 {
 	struct chip_sy6974b *chip = charger_ic;
@@ -2591,6 +2605,7 @@ struct oplus_chg_operations  oplus_chg_sy6974b_ops = {
 	.get_usbtemp_volt = oplus_get_usbtemp_volt,
 	.set_typec_cc_open = oplus_mt6789_usbtemp_set_cc_open,
 	.set_typec_sinkonly = oplus_mt6789_usbtemp_set_typec_sinkonly,
+	.check_cc_mode = sy6974b_oplus_check_cc_mode,
 	.get_shortc_hw_gpio_status = sy6974b_get_shortc_hw_gpio_status,
 	.oplus_chg_get_pd_type = sy6974b_get_pd_type,
 	.oplus_chg_pd_setup = sy6974b_chg_set_pd_config,

@@ -1276,6 +1276,7 @@ int sgm41542_disable_charging(void)
 		return 0;
 
 	chip->charger_current_pre = -1;
+	chip->sw_aicl_count = 0;
 	sgm41542_enable_gpio(chip, false);
 	if (!g_oplus_chip || !g_oplus_chip->otg_online)
 		sgm41542_otg_disable();

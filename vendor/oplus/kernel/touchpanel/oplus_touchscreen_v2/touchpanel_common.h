@@ -151,6 +151,8 @@
 #define REPORT_RATE_GAME_300    300
 #define REPORT_RATE_GAME_600    600
 
+#define REPORT_RATE_MAX_TEST_TIME_S    20
+
 #ifdef TP_ALL_GESTURE_SUPPORT
 #undef TP_ALL_GESTURE_SUPPORT
 #endif
@@ -1146,6 +1148,7 @@ struct touchpanel_data {
 	bool is_incell_panel;                               /*touchpanel is incell*/
 	bool disable_suspend_irq_handler;                   /*touchpanel is support disable suspend irq handler */
 	bool is_noflash_ic;                                 /*noflash ic*/
+	bool report_rate_testing;                            /*is report rate testing*/
 	tp_bus_type bus_type;                                 /* tp bus type*/
 	int palm_enable;                                    /*palm enable or not*/
 	int fd_enable;                                        /*face dectet enable or not*/
@@ -1162,6 +1165,10 @@ struct touchpanel_data {
 	int tp_ic_touch_num;                                 /*tp ic get touch num */
 	int last_tp_ic_touch_num;                            /*last tp ic get touch num */
 	int pen_mode_tp_state;
+	u32 get_frame_num;
+	u16 report_rate_test_time;
+	u32 touch_major_sum;
+
 
 	int palm_to_sleep_enable;                            /*detect palm need to sleep when device in Screen lock*/
 

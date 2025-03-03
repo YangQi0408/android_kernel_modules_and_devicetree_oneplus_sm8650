@@ -2678,6 +2678,10 @@ static ssize_t protocol_type_show(struct device *dev,
 		fast_chg_type = pre_fast_chg_type;
 	} else {
 		fast_chg_type = subtype;
+		if ((subtype == CHARGER_SUBTYPE_PD) || (subtype == CHARGER_SUBTYPE_PPS)) {
+			if (!chip->check_pd_svooc_complete)
+				fast_chg_type = CHARGER_SUBTYPE_DEFAULT;
+		}
 	}
 
 	chg_err("fast_chg_type: %d\n", fast_chg_type);
@@ -2869,7 +2873,7 @@ static ssize_t cpa_power_show(struct device *dev,
 	pps_online = oplus_is_pps_charging();
 
 	if (ufcs_online) {
-		pps_or_ufcs_power = oplus_ufcs_adapter_id_to_power();
+		pps_or_ufcs_power = oplus_ufcs_get_power();
 	} else if (pps_online) {
 		pps_or_ufcs_power = oplus_pps_show_power();
 	}

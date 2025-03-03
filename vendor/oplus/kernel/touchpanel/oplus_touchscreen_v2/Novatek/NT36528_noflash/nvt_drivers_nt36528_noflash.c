@@ -4651,7 +4651,7 @@ static int nvt_black_screen_test_preoperation(struct seq_file *s,
 		goto RELEASE_DATA;
 	}
 
-	ret = request_firmware(&ts->com_test_data.limit_fw, chip_info->test_limit_name,
+	/*ret = request_firmware(&ts->com_test_data.limit_fw, chip_info->test_limit_name,
 				   &chip_info->s_client->dev);
 	TPD_INFO("Roland--->fw path is %s\n", chip_info->test_limit_name);
 
@@ -4659,7 +4659,7 @@ static int nvt_black_screen_test_preoperation(struct seq_file *s,
 		TPD_INFO("Request firmware failed - %s (%d)\n", chip_info->test_limit_name,
 			 ret);
 		goto RELEASE_DATA;
-	}
+	}*/
 
 	/*get test data*/
 	ph = (struct auto_test_header *)(ts->com_test_data.limit_fw->data);
@@ -4761,8 +4761,8 @@ RELEASE_DATA:
 RELEASE_FIRMWARE:
 	release_firmware(ts->com_test_data.black_test_fw);
 	ts->com_test_data.black_test_fw = NULL;
-	release_firmware(ts->com_test_data.limit_fw);
-	ts->com_test_data.limit_fw = NULL;
+	/*release_firmware(ts->com_test_data.limit_fw);
+	ts->com_test_data.limit_fw = NULL;*/
 	tp_devm_kfree(&chip_info->s_client->dev, (void **)&fw_name_test,
 			  MAX_FW_NAME_LENGTH);
 	chip_info->need_judge_irq_throw = false;
@@ -4785,8 +4785,8 @@ static int nvt_black_screen_test_endoperation(struct seq_file *s,
 
 	release_firmware(ts->com_test_data.black_test_fw);
 	ts->com_test_data.black_test_fw = NULL;
-	release_firmware(ts->com_test_data.limit_fw);
-	ts->com_test_data.limit_fw = NULL;
+	/*release_firmware(ts->com_test_data.limit_fw);
+	ts->com_test_data.limit_fw = NULL;*/
 	chip_info->need_judge_irq_throw = false;
 
 	return 0;
@@ -6525,7 +6525,7 @@ static int nvt_autotest_preoperation(struct seq_file *s, void *chip_data,
 
 	TPD_INFO("%s +\n", __func__);
 	/* request test limit data from userspace*/
-	TPD_INFO("panel_data.test_limit_name - %s\n", ts->panel_data.test_limit_name);
+	/*TPD_INFO("panel_data.test_limit_name - %s\n", ts->panel_data.test_limit_name);
 	ret = request_firmware(&ts->com_test_data.limit_fw,
 				   ts->panel_data.test_limit_name, ts->dev);
 
@@ -6533,8 +6533,7 @@ static int nvt_autotest_preoperation(struct seq_file *s, void *chip_data,
 		TPD_INFO("Request firmware failed - %s (%d)\n", ts->panel_data.test_limit_name,
 			 ret);
 		return -1;
-	}
-
+	}*/
 
 	nvt_esd_check_enable(chip_info, false);
 
@@ -6561,6 +6560,9 @@ static int nvt_autotest_preoperation(struct seq_file *s, void *chip_data,
 				  MAX_FW_NAME_LENGTH);
 		return -1;
 	}
+
+	tp_devm_kfree(&chip_info->s_client->dev, (void **)&fw_name_test,
+			  MAX_FW_NAME_LENGTH);
 
 	ret = nvt_fw_update_sub(chip_info, ts->com_test_data.black_test_fw, 0);
 
@@ -6751,10 +6753,10 @@ RELEASE_FIRMWARE:
 		ts->com_test_data.black_test_fw = NULL;
 	}
 
-	if (ts->com_test_data.limit_fw) {
+	/*if (ts->com_test_data.limit_fw) {
 		release_firmware(ts->com_test_data.limit_fw);
 		ts->com_test_data.limit_fw = NULL;
-	}
+	} */
 
 	tp_devm_kfree(&chip_info->s_client->dev, (void **)&fw_name_test,
 			  MAX_FW_NAME_LENGTH);
@@ -6780,10 +6782,10 @@ static int nvt_autotest_endoperation(struct seq_file *s, void *chip_data,
 		ts->com_test_data.black_test_fw = NULL;
 	}
 
-	if (ts->com_test_data.limit_fw) {
+	/*if (ts->com_test_data.limit_fw) {
 		release_firmware(ts->com_test_data.limit_fw);
 		ts->com_test_data.limit_fw = NULL;
-	}
+	}*/
 
 	TPD_INFO("%s -\n", __func__);
 

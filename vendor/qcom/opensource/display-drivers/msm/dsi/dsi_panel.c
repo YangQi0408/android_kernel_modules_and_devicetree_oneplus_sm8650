@@ -71,6 +71,7 @@
 #define RSCC_MODE_THRESHOLD_TIME_US 40
 #define DCS_COMMAND_THRESHOLD_TIME_US 40
 
+extern bool g_gamma_regs_read_done;
 /*#ifdef OPLUS_FEATURE_TP_BASIC*/
 extern int (*tp_gesture_enable_notifier)(unsigned int tp_index);
 extern int dcc_flags;
@@ -2509,6 +2510,9 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-uir-loading-effect-2-command",
 	"qcom,mdss-dsi-uir-loading-effect-3-command",
 	"qcom,mdss-dsi-set-dc-on-command",
+	"oplus,dsi-panel-gamma-compensation-page0-command",
+	"oplus,dsi-panel-gamma-compensation-page1-command",
+	"oplus,dsi-panel-gamma-compensation-command",
 #endif /* OPLUS_FEATURE_DISPLAY */
 };
 
@@ -2726,6 +2730,9 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-uir-loading-effect-2-command-state",
 	"qcom,mdss-dsi-uir-loading-effect-3-command-state",
 	"qcom,mdss-dsi-set-dc-on-command-state",
+	"oplus,dsi-panel-gamma-compensation-page0-command-state",
+	"oplus,dsi-panel-gamma-compensation-page1-command-state",
+	"oplus,dsi-panel-gamma-compensation-command-state",
 #endif /* OPLUS_FEATURE_DISPLAY */
 
 };
@@ -5996,6 +6003,15 @@ int dsi_panel_enable(struct dsi_panel *panel)
 		if (panel->is_secondary) {
 			panel->panel_initialized = true;
 			goto error;
+		}
+	}
+
+	if (!strcmp(panel->name, "AA577 P 3 A0020 dsc cmd mode panel")) {
+		if (panel->oplus_priv.gamma_compensation_support && g_gamma_regs_read_done) {
+			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_GAMMA_COMPENSATION);
+			if (rc) {
+				DSI_ERR("send DSI_CMD_GAMMA_COMPENSATION failed\n");
+			}
 		}
 	}
 #endif

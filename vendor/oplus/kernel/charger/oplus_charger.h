@@ -1196,6 +1196,8 @@ struct oplus_chg_chip {
 	int subboard_temp;
 	bool subboard_ntc_abnormal_status;
 	int tbatt_power_off_cali_temp;
+	int removed_subboard_ntc_temp;
+	int removed_bat_ntc_temp;
 	bool tbatt_use_subboard_temp;
 	bool tbatt_shell_status;
 	bool support_tbatt_shell;
@@ -1400,6 +1402,7 @@ struct oplus_chg_chip {
 	struct device_node *fast_node;
 	const struct oplus_chg_operations *sub_chg_ops;
 	bool is_double_charger_support;
+	bool check_pd_svooc_complete;
 	int pd_curr_max;
 	int pd_svooc;
 	int pd_chging;
@@ -1517,6 +1520,7 @@ struct oplus_chg_chip {
 	oplus_chg_track_trigger cool_down_match_err_load_trigger;
 	struct delayed_work cool_down_match_err_load_trigger_work;
 	struct delayed_work soc_update_when_resume_work;
+	struct delayed_work check_pd_svooc_work;
 #if IS_ENABLED(CONFIG_DRM_PANEL_NOTIFY) || IS_ENABLED(CONFIG_OPLUS_CHG_DRM_PANEL_NOTIFY)
 	struct delayed_work panel_notify_reg_work;
 #endif

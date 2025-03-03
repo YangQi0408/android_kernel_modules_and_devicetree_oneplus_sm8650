@@ -7015,6 +7015,27 @@ static int oplus_chg_8350_get_charger_type(struct oplus_chg_ic_dev *ic_dev, int 
 
 static int oplus_chg_8350_rerun_bc12(struct oplus_chg_ic_dev *ic_dev)
 {
+	struct battery_chg_dev *bcdev;
+	struct psy_state *pst = NULL;
+	int rc = 0;
+
+	if (ic_dev == NULL) {
+		chg_err("oplus_chg_ic_dev is NULL");
+		return -ENODEV;
+	}
+	bcdev = oplus_chg_ic_get_drvdata(ic_dev);
+	pst = &bcdev->psy_list[PSY_TYPE_USB];
+	if (pst == NULL) {
+		chg_err("pst is NULL");
+		return -ENODEV;
+	}
+
+	rc = write_property_id(bcdev, pst, USB_SET_RERUN_BC12, 1);
+	if (rc < 0) {
+		chg_err("start rerun_bc12 fail, rc=%d\n", rc);
+		return -EINVAL;
+	}
+	chg_info("start rerun_bc12, rc:%d\n", rc);
 	return 0;
 }
 
