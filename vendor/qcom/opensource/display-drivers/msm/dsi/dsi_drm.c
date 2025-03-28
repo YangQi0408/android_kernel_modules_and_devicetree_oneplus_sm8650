@@ -209,9 +209,13 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		atomic_set(&c_bridge->display->panel->esd_recovery_pending, 0);
 
 #ifdef OPLUS_FEATURE_DISPLAY
-	mutex_lock(&c_bridge->display->display_lock);
-	oplus_panel_switch_vid_mode(c_bridge->display, &(c_bridge->dsi_mode));
-	mutex_unlock(&c_bridge->display->display_lock);
+	if (!strcmp(c_bridge->display->panel->name, "AB964 p 1 A0017 dsc video mode panel")) {
+		DSI_DEBUG("This is AB964, skip\n");
+	} else {
+		mutex_lock(&c_bridge->display->display_lock);
+		oplus_panel_switch_vid_mode(c_bridge->display, &(c_bridge->dsi_mode));
+		mutex_unlock(&c_bridge->display->display_lock);
+	}
 #endif
 
 	/* By this point mode should have been validated through mode_fixup */
@@ -222,6 +226,16 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 		       c_bridge->id, rc);
 		return;
 	}
+
+#ifdef OPLUS_FEATURE_DISPLAY
+	if (!strcmp(c_bridge->display->panel->name, "AB964 p 1 A0017 dsc video mode panel")) {
+		if (c_bridge->dsi_mode.timing.refresh_rate == 120 || c_bridge->dsi_mode.timing.refresh_rate == 60) {
+			mutex_lock(&c_bridge->display->display_lock);
+			oplus_panel_switch_vid_mode(c_bridge->display, &(c_bridge->dsi_mode));
+			mutex_unlock(&c_bridge->display->display_lock);
+		}
+	}
+#endif
 
 	if (c_bridge->dsi_mode.dsi_mode_flags &
 		(DSI_MODE_FLAG_SEAMLESS | DSI_MODE_FLAG_VRR |
@@ -919,6 +933,11 @@ int dsi_conn_set_info_blob(struct drm_connector *connector,
 
 	sde_kms_info_add_keyint(info, "max os brightness", panel->bl_config.brightness_max_level);
 	sde_kms_info_add_keyint(info, "max panel backlight", panel->bl_config.bl_max_level);
+
+
+#ifdef OPLUS_FEATURE_DISPLAY_ONSCREENFINGERPRINT
+	sde_kms_info_add_keyint(info, "exit_aod_cost_frame", panel->oplus_priv.aod_off_frame_cost);
+#endif
 
 	if (panel->spr_info.enable)
 		sde_kms_info_add_keystr(info, "spr_pack_type",

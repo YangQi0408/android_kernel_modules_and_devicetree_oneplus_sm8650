@@ -45,5 +45,4 @@ dtbo-$(CONFIG_ARCH_VOLCANO)     += volcano-camera.dtbo
 #dtbo-$(CONFIG_ARCH_VOLCANO)     += volcano-camera-sensor-qrd.dtbo
 
 #OPLUS_DTS_OVERLAY start
-dtbo-$(CONFIG_ARCH_VOLCANO)    += oplus/Piaget-camera-overlay.dtbo \
 #OPLUS_DTS_OVERLAY end

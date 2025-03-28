@@ -1293,6 +1293,7 @@ static void oplus_wired_plugin_work(struct work_struct *work)
 		vote(chip->icl_votable, HIDL_VOTER, false, 0, true);
 		vote(chip->icl_votable, MAX_VOTER, false, 0, true);
 		vote(chip->icl_votable, STRATEGY_VOTER, false, 0, true);
+		vote(chip->icl_votable, PD_PDO_ICL_VOTER, false, 0, true);
 		chip->pd_retry_count = 0;
 		chip->qc_retry_count = 0;
 		chip->qc_action = OPLUS_ACTION_NULL;
@@ -1518,7 +1519,7 @@ static void oplus_pdqc_retention_disconnect_work(struct work_struct *work)
 
 	oplus_mms_get_item_data(chip->retention_topic, RETENTION_ITEM_DISCONNECT_COUNT, &data, true);
 	chip->pdqc_connect_error_count = data.intval;
-	chg_info("cpa_current_type= %d, pdqc_connect_error_count =%d\n",
+	chg_debug("cpa_current_type= %d, pdqc_connect_error_count =%d\n",
 		chip->cpa_current_type, chip->pdqc_connect_error_count);
 	if (chip->pdqc_connect_error_count > DPQC_CONNECT_ERROR_COUNT_LEVEL) {
 		if (chip->cpa_current_type == CHG_PROTOCOL_QC) {
