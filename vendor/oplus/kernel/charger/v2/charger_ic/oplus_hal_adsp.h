@@ -273,6 +273,7 @@ enum battery_property_id {
 	BATT_SET_USED_FLAG,
 	BATT_DEEP_DISCHG_LAST_CC,
 	BATT_GET_UFCS_RUNNING_STATE,
+	BATT_VOLT_MIN,
 #endif
 	BATT_PROP_MAX,
 };
@@ -717,6 +718,7 @@ struct battery_chg_dev {
 	struct completion	 ufcs_read_ack;
 
 	bool calib_info_init;
+	bool real_mvolts_min_support;
 	int cp_work_mode;
 	bool gauge_data_initialized;
 	int otg_scheme;

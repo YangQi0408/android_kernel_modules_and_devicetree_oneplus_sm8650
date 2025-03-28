@@ -1206,7 +1206,7 @@ static void syna_get_diff_data_record(struct syna_tcm *tcm)
 		return;
 	}
 
-	if (!tcm->differ_read_every_frame || tp_hbp_debug != LEVEL_DEBUG) {
+	if (!tcm->differ_read_every_frame || (tp_hbp_debug != LEVEL_DEBUG && tp_hbp_debug != LEVEL_DEBUG_SC_OFF)) {
 		LOGD("differ_read_every_frame is false or debug_level < 2\n");
 		return;
 	}
@@ -1310,7 +1310,10 @@ static irqreturn_t syna_dev_isr(int irq, void *data)
 	tcm->isr_pid = current->pid;
 #if defined(CONFIG_HMBIRD_SCHED) || defined(CONFIG_HMBIRD_SCHED_GKI)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
-	hmbird_set_sched_prop(current, SCHED_PROP_DEADLINE_LEVEL2);
+	if (HMBIRD_GKI_VERSION == get_hmbird_version_type())
+		sched_set_sched_prop(current, SCHED_PROP_DEADLINE_LEVEL2);
+	else if (HMBIRD_OGKI_VERSION == get_hmbird_version_type())
+		hmbird_set_sched_prop(current, SCHED_PROP_DEADLINE_LEVEL2);
 #else
 	sched_set_sched_prop(current, SCHED_PROP_DEADLINE_LEVEL2);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)) */
