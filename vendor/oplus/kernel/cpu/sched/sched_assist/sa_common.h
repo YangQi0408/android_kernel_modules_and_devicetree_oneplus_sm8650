@@ -121,7 +121,8 @@ UX_PRIORITY_PROTECT: Lowest priority protected ux type
 #define SA_INPUT					(1 << 5)
 #define SA_LAUNCHER_SI				(1 << 6)
 #define SA_SCENE_OPT_SET			(1 << 7)
-#define SA_GPU_COMPOSITION  			(1 << 8)
+#define SA_GPU_COMPOSITION			(1 << 8)
+#define SA_CAMERA_HEAVY				(1 << 10)
 
 #define ROOT_UID               0
 #define SYSTEM_UID             1000
