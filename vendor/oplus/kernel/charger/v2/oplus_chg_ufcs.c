@@ -317,6 +317,7 @@ struct oplus_ufcs_limits {
 	int ufcs_high_temp;
 	int ufcs_low_soc;
 	int ufcs_high_soc;
+	int ufcs_removed_bat_decidegc;
 };
 
 struct ufcs_full_curve {
@@ -3570,6 +3571,7 @@ static void oplus_ufcs_check_temp(struct oplus_ufcs *chip)
 #define UFCS_TFG_OV_CNT		6
 #define UFCS_BTB_OV_CNT		8
 #define UFCS_TBATT_OV_CNT	1
+#define UFCS_FG_CONTACT_CNT	2
 
 	ts_current = oplus_current_kernel_time();
 	if ((ts_current.tv_sec - chip->timer.temp_timer.tv_sec) < UFCS_UPDATE_TEMP_TIME)
@@ -3615,6 +3617,14 @@ static void oplus_ufcs_check_temp(struct oplus_ufcs *chip)
 				if (chip->count.tfg_over >= UFCS_TFG_OV_CNT) {
 					chip->count.tfg_over = 0;
 					vote(chip->ufcs_disable_votable, TFG_VOTER, true, 1, false);
+					oplus_ufcs_push_err_info(chip, UFCS_ERR_TFG_OVER, batt_temp);
+				}
+			} else if (batt_temp < chip->limits.ufcs_removed_bat_decidegc) {
+				chg_err("ufcs tfg < -39°\n");
+				chip->count.tfg_over++;
+				if (chip->count.tfg_over >= UFCS_FG_CONTACT_CNT) {
+					chip->count.tfg_over = 0;
+					vote(chip->ufcs_not_allow_votable, BATT_TEMP_VOTER, true, 1, false);
 					oplus_ufcs_push_err_info(chip, UFCS_ERR_TFG_OVER, batt_temp);
 				}
 			} else {
@@ -4861,6 +4871,10 @@ static void oplus_ufcs_subscribe_comm_topic(struct oplus_mms *topic,
 		chip->chg_ctrl_by_sale_mode = (bool)data.intval;
 
 	vote(chip->ufcs_boot_votable, COMM_TOPIC_VOTER, false, 0, false);
+
+	chip->limits.ufcs_removed_bat_decidegc =
+		oplus_comm_get_removed_bat_decidegc(chip->comm_topic);
+	chg_info("chip->limits.ufcs_removed_bat_decidegc = %d", chip->limits.ufcs_removed_bat_decidegc);
 }
 
 static void oplus_ufcs_wired_subs_callback(struct mms_subscribe *subs,

@@ -289,8 +289,10 @@ enum oplus_chg_track_info_flag {
 	TRACK_NOTIFY_FLAG_UISOH_INFO,
 	TRACK_NOTIFY_FLAG_GAUGE_INFO,
 	TRACK_NOTIFY_FLAG_GAUGE_MODE,
+	TRACK_NOTIFY_FLAG_RECHG_INFO,
 	TRACK_NOTIFY_FLAG_ANTI_EXPANSION_INFO,
-	TRACK_NOTIFY_FLAG_GENERAL_RECORD_LAST = TRACK_NOTIFY_FLAG_ANTI_EXPANSION_INFO,
+	TRACK_NOTIFY_FLAG_DEC_VOL_INFO,
+	TRACK_NOTIFY_FLAG_GENERAL_RECORD_LAST = TRACK_NOTIFY_FLAG_DEC_VOL_INFO,
 
 	TRACK_NOTIFY_FLAG_NO_CHARGING_FIRST,
 	TRACK_NOTIFY_FLAG_NO_CHARGING = TRACK_NOTIFY_FLAG_NO_CHARGING_FIRST,
@@ -458,4 +460,5 @@ int oplus_chg_olc_config_set(const char *buf);
 int oplus_chg_olc_config_get(char *buf);
 int oplus_track_upload_ntc_abnormal_info(int ntc_temp, char *ntc_name,
 						   char *scene, char *reason, char *other);
+int oplus_chg_track_upload_rechg_info(void);
 #endif

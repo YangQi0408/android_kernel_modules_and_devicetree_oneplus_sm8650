@@ -3743,7 +3743,14 @@ static void oplus_comm_check_ffc(struct oplus_chg_comm *chip)
 			chg_err("FFC charging is not possible in this temp region, temp_region=%s\n",
 				oplus_comm_get_ffc_temp_region_str(ffc_temp_region));
 			oplus_ffc_exit_reset_info(chip);
-			goto err;
+			if (chip->wired_online) {
+				if (is_wired_charging_disable_votable_available(chip))
+					vote(chip->wired_charging_disable_votable, FFC_VOTER, true, 1, false);
+				oplus_comm_set_ffc_status(chip, FFC_IDLE);
+				return;
+			} else {
+				goto err;
+			}
 		}
 		if (chip->ffc_temp_region != ffc_temp_region) {
 			chip->ffc_temp_region = ffc_temp_region;
@@ -3825,8 +3832,14 @@ ffc_step_done:
 			chip->ffc_fcc_count = 0;
 			chip->ffc_fv_count = 0;
 			if (chip->wired_online) {
-				chip->ffc_charging = false;
-				oplus_comm_set_ffc_status(chip, FFC_DEFAULT);
+				if (chip->soc >= 100) {
+					chip->ffc_charging = false;
+					oplus_comm_set_ffc_status(chip, FFC_DEFAULT);
+				} else {
+					if (is_wired_charging_disable_votable_available(chip))
+						vote(chip->wired_charging_disable_votable, FFC_VOTER, true, 1, false);
+					oplus_comm_set_ffc_status(chip, FFC_IDLE);
+				}
 			} else {
 				oplus_comm_set_ffc_status(chip, FFC_IDLE);
 			}
@@ -3860,7 +3873,7 @@ ffc_step_done:
 		break;
 	case FFC_IDLE:
 		chip->ffc_fcc_count++;
-		if (chip->ffc_fcc_count > 6) {
+		if (chip->ffc_fcc_count >= 12) {
 			chip->ffc_charging = false;
 			chip->ffc_fcc_count = 0;
 			chip->ffc_fv_count = 0;
@@ -9283,4 +9296,19 @@ int oplus_comm_get_wired_aging_ffc_version(struct oplus_mms *topic)
 	spec = &chip->spec;
 
 	return spec->wired_aging_ffc_version;
+}
+
+int oplus_comm_get_removed_bat_decidegc(struct oplus_mms *topic)
+{
+	struct oplus_chg_comm *chip;
+	struct oplus_comm_spec_config *spec;
+
+	if (topic == NULL) {
+		chg_err("topic is NULL\n");
+		return -ENODEV;
+	}
+	chip = oplus_mms_get_drvdata(topic);
+	spec = &chip->spec;
+
+	return spec->removed_bat_decidegc;
 }

@@ -21,7 +21,6 @@ enum cpa_topic_item {
 	CPA_ITEM_CHG_TYPE,
 	CPA_ITEM_ALLOW,
 	CPA_ITEM_TIMEOUT,
-	CPA_ITEM_NOT_READY_PROTOCOL,
 };
 
 struct protocol_map {
