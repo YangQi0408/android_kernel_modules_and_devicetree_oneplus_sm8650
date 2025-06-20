@@ -30,9 +30,11 @@
 unsigned int dynamic_switch;
 unsigned int g_bd_opt_enable;
 
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 unsigned long *g_free_ref = NULL;
-struct kmem_cache *oplus_binder_struct_cachep = NULL;
 unsigned int g_ref_enable = 1;
+#endif
+struct kmem_cache *oplus_binder_struct_cachep = NULL;
 unsigned int g_sched_enable = 1;
 EXPORT_SYMBOL(g_sched_enable);
 unsigned long long g_sched_debug = 0;
@@ -47,7 +49,9 @@ static unsigned int allow_accumulate_ux = 1;
 int unset_async_ux_inrestore = 1;
 
 static int insert_limit[NUM_INSERT_MAX] = {0};
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 static struct binder_proc *system_server_proc = NULL;
+#endif
 
 #if (((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)) \
 	&& (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))) \
@@ -59,7 +63,9 @@ unsigned int sync_use_t_vendordata = 1;
 unsigned int sync_use_t_vendordata = 0;
 #endif
 
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 static DEFINE_SPINLOCK(binder_ref_lock);
+#endif
 
 #define trace_binder_debug(x...) \
 	do { \
@@ -1468,6 +1474,7 @@ static void android_vh_binder_proc_transaction_finish_handler(void *unused, stru
 	}
 }
 
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 static void binder_alloc_desc_opt_init(struct binder_proc *proc)
 {
 	if (current_uid().val != SYSTEM_SERVER_UID) {
@@ -1591,6 +1598,7 @@ static void android_vh_binder_free_proc_handler(void *unused,
 			spin_unlock(&binder_ref_lock);
 	}
 }
+#endif
 
 void register_binder_sched_vendor_hooks(void)
 {
@@ -1616,6 +1624,7 @@ void register_binder_sched_vendor_hooks(void)
 		android_vh_free_oplus_binder_struct_handler, NULL);
 	register_trace_android_vh_binder_buffer_release(
 		android_vh_binder_buffer_release_handler, NULL);
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 	register_trace_android_vh_binder_find_desc(
 		android_vh_binder_find_desc_handler, NULL);
 	register_trace_android_vh_binder_set_desc_bit(
@@ -1624,6 +1633,7 @@ void register_binder_sched_vendor_hooks(void)
 		android_vh_binder_desc_init_handler, NULL);
 	register_trace_android_vh_binder_free_proc(
 		android_vh_binder_free_proc_handler, NULL);
+#endif
 	register_trace_android_vh_binder_set_priority(
 		android_vh_binder_set_priority_handler, NULL);
 }
@@ -1644,7 +1654,9 @@ void oplus_binder_sched_init(void)
 	pr_err("g_bd_opt_enable : %d\n", g_bd_opt_enable);
 
 	if(unlikely(!binder_opt_enable(BD_BINDER_REF_OPT_ENABLE))) {
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 		g_ref_enable = 0;
+#endif
 	}
 
 	oplus_binder_struct_cachep = kmem_cache_create("oplus_binder_struct",
@@ -1653,7 +1665,9 @@ void oplus_binder_sched_init(void)
 	register_binder_sched_vendor_hooks();
 }
 
+#ifdef CONFIG_OPLUS_BINDER_REF_OPT
 module_param_named(binder_ref_enable, g_ref_enable, uint, 0660);
+#endif
 module_param_named(binder_sched_enable, g_sched_enable, uint, 0660);
 module_param_named(binder_sched_debug, g_sched_debug, ullong, 0660);
 module_param_named(binder_async_ux_test, async_ux_test, uint, 0660);

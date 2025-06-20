@@ -631,6 +631,7 @@ bool is_min_cluster(int cpu);
 bool is_max_cluster(int cpu);
 bool is_mid_cluster(int cpu);
 bool is_top(struct task_struct *p);
+bool im_mali(const char *comm);
 bool task_is_runnable(struct task_struct *task);
 int get_ux_state(struct task_struct *task);
 
