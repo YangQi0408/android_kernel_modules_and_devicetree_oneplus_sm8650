@@ -96,7 +96,7 @@ enum {
 #define SIA81XX_DISABLE_LEVEL				(0)
 
 /* 10us > pulse width > 0.75us */
-#define MIN_OWI_PULSE_GAP_TIME_US			(3)
+#define MIN_OWI_PULSE_GAP_TIME_US			(10)
 #define MAX_OWI_PULSE_GAP_TIME_US			(160)
 #define MAX_OWI_RETRY_TIMES					(10)
 #define MIN_OWI_MODE						(1)
@@ -2215,7 +2215,6 @@ static int sipa_spk_mute_ctrl_put(struct snd_kcontrol *kcontrol,
 
 	if (si_pa) {
 		if (speaker_mute_control) {
-			si_pa->sipa_on = false;
 			if (sia91xx_soft_mute(si_pa)) {
 				gpio_set_value(si_pa->rst_pin, 1);
 			}

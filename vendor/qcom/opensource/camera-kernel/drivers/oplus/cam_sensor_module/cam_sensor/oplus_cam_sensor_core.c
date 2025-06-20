@@ -49,7 +49,10 @@ int cam_ftm_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 		s_ctrl->sensordata->slave_info.sensor_id == 0x002B ||
 		s_ctrl->sensordata->slave_info.sensor_id == 0x38E5 ||
 		s_ctrl->sensordata->slave_info.sensor_id == 0x0896 ||
-		s_ctrl->sensordata->slave_info.sensor_id == 0x32e2 )
+		s_ctrl->sensordata->slave_info.sensor_id == 0x32e2 ||
+		s_ctrl->sensordata->slave_info.sensor_id == 0xe0 ||
+		s_ctrl->sensordata->slave_info.sensor_id == 0x5044 ||
+		s_ctrl->sensordata->slave_info.sensor_id == 0xeb52)
 	{
 		sensor_setting.reg_setting = sensor_init_settings.streamoff.reg_setting;
 		sensor_setting.addr_type = sensor_init_settings.streamoff.addr_type;
@@ -344,7 +347,7 @@ int cam_ftm_power_up(struct cam_sensor_ctrl_t *s_ctrl)
 		sensor_setting.addr_type = sensor_init_settings.imx896_setting.addr_type;
 		sensor_setting.data_type = sensor_init_settings.imx896_setting.data_type;
 		sensor_setting.size = sensor_init_settings.imx896_setting.size;
-		sensor_setting.delay = sensor_init_settings.imx906_setting.delay;
+		sensor_setting.delay = sensor_init_settings.imx896_setting.delay;
 		rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
 	}
 	else if (s_ctrl->sensordata->slave_info.sensor_id == 0x32e2)
@@ -356,6 +359,39 @@ int cam_ftm_power_up(struct cam_sensor_ctrl_t *s_ctrl)
 		sensor_setting.data_type = sensor_init_settings.gc32e2_setting.data_type;
 		sensor_setting.size = sensor_init_settings.gc32e2_setting.size;
 		sensor_setting.delay = sensor_init_settings.gc32e2_setting.delay;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+	}
+	else if (s_ctrl->sensordata->slave_info.sensor_id == 0xe0)
+	{
+		oplus_shift_sensor_mode(s_ctrl);
+		CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+		sensor_setting.reg_setting = sensor_init_settings.gc02m1_setting.reg_setting;
+		sensor_setting.addr_type = sensor_init_settings.gc02m1_setting.addr_type;
+		sensor_setting.data_type = sensor_init_settings.gc02m1_setting.data_type;
+		sensor_setting.size = sensor_init_settings.gc02m1_setting.size;
+		sensor_setting.delay = sensor_init_settings.gc02m1_setting.delay;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+	}
+	else if (s_ctrl->sensordata->slave_info.sensor_id == 0x5044)
+	{
+		oplus_shift_sensor_mode(s_ctrl);
+		CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+		sensor_setting.reg_setting = sensor_init_settings.ov50d_setting.reg_setting;
+		sensor_setting.addr_type = sensor_init_settings.ov50d_setting.addr_type;
+		sensor_setting.data_type = sensor_init_settings.ov50d_setting.data_type;
+		sensor_setting.size = sensor_init_settings.ov50d_setting.size;
+		sensor_setting.delay = sensor_init_settings.ov50d_setting.delay;
+		rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+	}
+	else if (s_ctrl->sensordata->slave_info.sensor_id == 0xeb52)
+	{
+		oplus_shift_sensor_mode(s_ctrl);
+		CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+		sensor_setting.reg_setting = sensor_init_settings.sc201cs_setting.reg_setting;
+		sensor_setting.addr_type = sensor_init_settings.sc201cs_setting.addr_type;
+		sensor_setting.data_type = sensor_init_settings.sc201cs_setting.data_type;
+		sensor_setting.size = sensor_init_settings.sc201cs_setting.size;
+		sensor_setting.delay = sensor_init_settings.sc201cs_setting.delay;
 		rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
 	}
 	else
@@ -811,12 +847,14 @@ int cam_sensor_read_uniqueid(struct cam_sensor_ctrl_t *s_ctrl, void *arg)
 	int rc = 0;
 	int i = 0;
 	struct cam_control *cmd = (struct cam_control *)arg;
-	struct cam_oem_reg_setting *regsettings = vzalloc(cmd->size);
+	struct cam_oem_reg_setting *regsettings;
 	char uniqueid[MAX_UNIQUE_ID_LENGTH] = {'\0'};
+	char temp[MAX_UNIQUE_ID_LENGTH] = {'\0'};
 	int read_length = 0;
-	if (!s_ctrl || !cmd)
+	regsettings = vzalloc(cmd->size);
+	if (!s_ctrl || cmd == NULL || regsettings == NULL)
 	{
-		CAM_ERR(CAM_SENSOR, "cam_sensor_read_uniqueid s_ctrl or arg is null ");
+		CAM_ERR(CAM_SENSOR, "cam_sensor_read_uniqueid s_ctrl or arg or regsettings is null ");
 		return -1;
 	}
 
@@ -844,13 +882,10 @@ int cam_sensor_read_uniqueid(struct cam_sensor_ctrl_t *s_ctrl, void *arg)
 			rc = camera_io_dev_read(
 				&(s_ctrl->io_master_info), regsettings[i].reg_addr, &regsettings[i].reg_data,
 				regsettings[i].addr_type, regsettings[i].data_type, false);
-				if(regsettings[i].reg_data < 16){
-					sprintf(uniqueid,"%s0",uniqueid);
-					sprintf(uniqueid,"%s%x",uniqueid,regsettings[i].reg_data);
-				}else{
-					sprintf(uniqueid,"%s%x",uniqueid,regsettings[i].reg_data);
-				}
-		CAM_ERR(CAM_SENSOR, "reg_data %x reg_addr %x read_length %d uniqueid %s", regsettings[i].reg_data,regsettings[i].reg_addr,read_length,uniqueid);
+			snprintf(temp, sizeof(temp), "%s%02x", uniqueid, regsettings[i].reg_data);
+			strncpy(uniqueid, temp, sizeof(uniqueid));
+			uniqueid[sizeof(uniqueid) - 1] = '\0';
+			CAM_ERR(CAM_SENSOR, "reg_data %x reg_addr %x read_length %d uniqueid %s", regsettings[i].reg_data,regsettings[i].reg_addr,read_length,uniqueid);
 		}
 		else
 		{
