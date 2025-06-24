@@ -40,8 +40,6 @@
 
 #define ALARM_NUMTYPE 2
 
-#define COMM_LEN 16
-
 struct timerfd_ctx {
 	union {
 		struct hrtimer tmr;
