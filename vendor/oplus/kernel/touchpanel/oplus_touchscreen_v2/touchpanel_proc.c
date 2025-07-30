@@ -1041,6 +1041,7 @@ static ssize_t proc_aiunit_game_info_write(struct file *file,
 		goto write_exit;
 	}
 	tp_copy_from_user(buf, PAGESIZE * 6, buffer, count, PAGESIZE * 6 - 1);
+	buf[PAGESIZE * 6 - 1] = '\0';
 	memset(tp_set_aiunit_game_info, 0, MAX_AIUNIT_SET_NUM * sizeof(struct tp_aiunit_game_info));
 	memset(tp_get_aiunit_game_info, 0, MAX_AIUNIT_GET_NUM * sizeof(struct tp_aiunit_game_info));
 	get_all_buff = &buf[0];
@@ -2222,7 +2223,10 @@ static ssize_t proc_disable_touch_event_write(struct file *file, const char __us
 
 	TP_INFO(ts->tp_index, "%s: write value=%d\n", __func__,
 		disable_touch_event);
+	mutex_lock(&ts->mutex);
+	ts->ts_ops->mode_switch(ts->chip_data, MODE_UNDERWATER, disable_touch_event > 0);
 	ts->disable_touch_event = disable_touch_event;
+	mutex_unlock(&ts->mutex);
 
 	return count;
 }

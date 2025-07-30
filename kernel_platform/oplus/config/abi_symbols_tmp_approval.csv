@@ -26,3 +26,4 @@ tcf_block_get, 80393944
 tcf_block_put, 80393944
 tcf_classify, 80393944
 qdisc_watchdog_init, 80393944
+__tracepoint_android_vh_init_adjust_zone_wmark, 80351790

@@ -38,6 +38,9 @@
 #include <linux/kprobes.h>
 #include <linux/delay.h>
 #include "../../mm/internal.h"
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+#include "../mm_osvelte/mm-config.h"
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 
 #include <../kernel/oplus_cpu/sched/sched_assist/sa_common.h>
 #include <../kernel/oplus_cpu/sched/sched_info/osi_healthinfo.h>
@@ -616,14 +619,25 @@ static void kvmalloc_check_use_vmalloc(void *data, size_t size,
 	}
 }
 
+/*
+ * because kernel version update, and some ALLOC flags changed,
+ * if ALLOC_HARDER not in internel.h,
+ * use ALLOC_ALLOC_RESERVES and ALLOC_NON_BLOCK instead;
+ * otherwise, it will not be replaced.
+ */
+#if defined(ALLOC_HARDER) && defined(ALLOC_OOM)
+#define ALLOC_RESERVES (ALLOC_HARDER|ALLOC_OOM)
+#define ALLOC_NON_BLOCK ALLOC_HARDER
+#endif
+
 static void should_alloc_pages_retry(void *data, gfp_t gfp_mask,
 		int order, int *alloc_flags, int migratetype,
 		struct zone *preferred_zone, struct page **p_page, bool *should_alloc_retry)
 {
 	if (unlikely(test_task_ux(current)) && !in_interrupt() &&
 		(preferred_zone->nr_reserved_highatomic >= (SZ_8M >> PAGE_SHIFT)) &&
-		!(*alloc_flags & (ALLOC_HARDER|ALLOC_OOM)) && !(gfp_mask & __GFP_NORETRY)) {
-		*alloc_flags |= ALLOC_HARDER;
+		!(*alloc_flags & ALLOC_RESERVES) && !(gfp_mask & __GFP_NORETRY)) {
+		*alloc_flags |= ALLOC_NON_BLOCK;
 		*should_alloc_retry = true;
 	} else {
 		*should_alloc_retry = false;
@@ -757,6 +771,16 @@ static void unregister_uxmem_opt_vendor_hooks(void)
 static int __init uxmem_opt_init(void)
 {
 	int ret = 0;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_MM_OSVELTE)
+	struct config_oplus_bsp_uxmem_opt *config;
+
+	config = oplus_read_mm_config(module_name_uxmem_opt);
+	if (config && !config->enable) {
+		pr_info("%s is disabled in config\n", module_name_uxmem_opt);
+		return 0;
+	}
+#endif /* CONFIG_OPLUS_FEATURE_MM_OSVELTE */
 
 	if (!enable) {
 		pr_err("oplus_bsp_uxmem_opt is disabled in cmdline\n");
