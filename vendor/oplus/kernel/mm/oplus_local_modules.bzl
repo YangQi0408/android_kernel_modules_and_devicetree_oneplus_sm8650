@@ -87,10 +87,7 @@ def define_oplus_local_modules():
             "zram_opt/zram_opt.c",
         ]),
         includes = ["."],
-        local_defines = ["CONFIG_DYNAMIC_TUNING_SWAPPINESS", "CONFIG_OPLUS_BALANCE_ANON_FILE_RECLAIM", "CONFIG_HYBRIDSWAP_SWAPD"],
-        conditional_defines = {
-             "mtk":  ["CONFIG_OPLUS_EXTRA_FREE_KBYTES"],
-        },
+        local_defines = ["CONFIG_DYNAMIC_TUNING_SWAPPINESS", "CONFIG_OPLUS_BALANCE_ANON_FILE_RECLAIM", "CONFIG_HYBRIDSWAP_SWAPD","CONFIG_OPLUS_EXTRA_FREE_KBYTES"],
         copts = select({
             "//build/kernel/kleaf:kocov_is_true": ["-fprofile-arcs", "-ftest-coverage"],
             "//conditions:default": [],
