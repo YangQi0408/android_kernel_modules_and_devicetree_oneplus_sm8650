@@ -430,6 +430,9 @@
 						410 430 CURR_LIMIT_7BIT_4_0A 4 2
 						420 440 CURR_LIMIT_7BIT_3_0A 4 3 >;
 
+		oplus,plc_strategy-data = <&buck_simple_strategy &cp_2t1_simple_strategy &cp_1t1_simple_strategy>;
+		oplus,plc_strategy-names = "default", "svooc", "vooc";
+
 		oplus_virtual_vphy: oplus,virtual_vphy {
 			compatible = "oplus,virtual_vphy";
 			oplus,vphy_ic = <&master_vphy_sc8517>;
@@ -580,6 +583,9 @@
 		oplus_spec,ufcs_high_soc = <95>;
 		oplus,ufcs_charge_strategy_soc = <0 20 35 55 75 85 95>;
 		oplus,ufcs_charge_strategy_temp = <0 50 120 200 350 440 530>;
+
+		oplus,plc_strategy-data = <&oplus_ufcs_step_strategy &cp_2t1_simple_strategy>;
+		oplus,plc_strategy-names = "default", "third";
 
 		ufcs_oplus_lcf_strategy {
 			oplus,temp_type = <OPLUS_STRATEGY_USE_SHELL_TEMP>;
@@ -2005,6 +2011,38 @@
 		oplus_sc8517_cp: oplus,sc8517_cp {
 			oplus,ic_type = <OPLUS_CHG_IC_CP>;
 			oplus,ic_index = <0>;
+		};
+	};
+};
+
+&soc {
+	oplus_chg_plc: oplus,plc_charge {
+		compatible = "oplus,plc_charge";
+		oplus,plc_support = <CHG_PROTOCOL_UFCS>;
+		oplus,plc_soc = <90>;
+		oplus,plc_strategy-data = <&buck_simple_strategy>;
+		oplus,plc_strategy-names = "default";
+
+		oplus_ufcs_step_strategy: oplus_ufcs_step_strategy {
+			oplus,strategy_type = <PLC_STRATEGY_STEP>;
+		};
+
+		cp_2t1_simple_strategy: cp_2t1_simple_strategy {
+			oplus,strategy_type = <PLC_STRATEGY_SIMPLE>;
+			oplus,strategy_data {
+				strategy_curr_ma = <1000 1500>;
+			};
+		};
+
+		cp_1t1_simple_strategy: cp_1t1_simple_strategy {
+			oplus,strategy_type = <PLC_STRATEGY_SIMPLE>;
+			oplus,strategy_data {
+				strategy_curr_ma = <2000 3000>;
+			};
+		};
+
+		buck_simple_strategy: buck_simple_strategy {
+			oplus,strategy_type = <PLC_STRATEGY_SIMPLE>;
 		};
 	};
 };
