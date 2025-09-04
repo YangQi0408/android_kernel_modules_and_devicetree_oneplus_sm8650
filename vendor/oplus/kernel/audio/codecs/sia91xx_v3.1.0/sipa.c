@@ -2215,13 +2215,28 @@ static int sipa_spk_mute_ctrl_put(struct snd_kcontrol *kcontrol,
 
 	if (si_pa) {
 		if (speaker_mute_control) {
-			if (sia91xx_soft_mute(si_pa)) {
-				gpio_set_value(si_pa->rst_pin, 1);
+			if (true == si_pa->sipa_on ) {
+				if (false == sipa_regmap_get_chip_en(si_pa)) {
+					pr_info("[ info][%s] %s: chip_en is false, direct return!\n", LOG_FLAG, __func__);
+					return 0;
+				}
+
+				if (sia91xx_soft_mute(si_pa)) {
+					gpio_set_value(si_pa->rst_pin, 1);
+				}
 			}
-		} else if (si_pa->sipa_on == true) {
-			sipa_reg_init(si_pa);
-			sia91xx_dsp_start(si_pa, SNDRV_PCM_STREAM_PLAYBACK);
-			sipa_regmap_check_trimming(si_pa);
+		} else {
+			if (true == si_pa->sipa_on) {
+
+				if (true == sipa_regmap_get_chip_en(si_pa)) {
+					pr_info("[ info][%s] %s: chip_en is true, direct return!\n", LOG_FLAG, __func__);
+					return 0;
+				}
+
+				sipa_reg_init(si_pa);
+				sia91xx_dsp_start(si_pa, SNDRV_PCM_STREAM_PLAYBACK);
+				sipa_regmap_check_trimming(si_pa);
+			}
 		}
 	}
 
@@ -2904,7 +2919,11 @@ int sipa_i2c_probe(
 {
 	sipa_dev_t *si_pa = NULL;
 	struct device_node	*sipa_of_node = NULL;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 115)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
+	char *sipa_fw_name = "sipa.bin";
+#else
 	char *sipa_fw_name = "../../../../odm/firmware/sipa.bin";
+#endif
 	int ret = 0;
 	int addr_offset = 0;
 	char buf[50] = {0};
@@ -3464,7 +3483,11 @@ static int sipa_probe(struct platform_device *pdev)
 	int ret = 0;
 	sipa_dev_t *si_pa = NULL;
 	char work_name[20];
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 115)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
+	char *sipa_fw_name = "sipa.bin";
+#else
 	char *sipa_fw_name = "../../odm/firmware/sipa.bin";
+#endif
 #if IS_ENABLED(CONFIG_SND_SOC_OPLUS_PA_MANAGER)
 	struct oplus_speaker_device *speaker_device = NULL;
 	bool new_speaker_device_node = false;
