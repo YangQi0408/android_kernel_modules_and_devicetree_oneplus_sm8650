@@ -196,6 +196,10 @@ static void exit_check(void *data, struct task_struct *tsk)
 		return;
 	}
 
+	if (tsk_check == NULL) {
+		return;
+	}
+
 	get_task_struct(tsk_check);
 	tgid = tsk_check->tgid;
 	if (rcu_dereference(tsk_check->real_parent) == NULL ||
@@ -409,7 +413,7 @@ static ssize_t oplus_enable_ops_write(struct file *file, const char __user *buff
 		return -EINVAL;
 	}
 
-	if (ret != 0 && ret != 1) {
+	if (val != 0 && val != 1) {
 		return -EINVAL;
 	}
 

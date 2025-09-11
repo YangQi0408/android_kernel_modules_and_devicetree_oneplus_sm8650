@@ -2215,13 +2215,28 @@ static int sipa_spk_mute_ctrl_put(struct snd_kcontrol *kcontrol,
 
 	if (si_pa) {
 		if (speaker_mute_control) {
-			if (sia91xx_soft_mute(si_pa)) {
-				gpio_set_value(si_pa->rst_pin, 1);
+			if (true == si_pa->sipa_on ) {
+				if (false == sipa_regmap_get_chip_en(si_pa)) {
+					pr_info("[ info][%s] %s: chip_en is false, direct return!\n", LOG_FLAG, __func__);
+					return 0;
+				}
+
+				if (sia91xx_soft_mute(si_pa)) {
+					gpio_set_value(si_pa->rst_pin, 1);
+				}
 			}
-		} else if (si_pa->sipa_on == true) {
-			sipa_reg_init(si_pa);
-			sia91xx_dsp_start(si_pa, SNDRV_PCM_STREAM_PLAYBACK);
-			sipa_regmap_check_trimming(si_pa);
+		} else {
+			if (true == si_pa->sipa_on) {
+
+				if (true == sipa_regmap_get_chip_en(si_pa)) {
+					pr_info("[ info][%s] %s: chip_en is true, direct return!\n", LOG_FLAG, __func__);
+					return 0;
+				}
+
+				sipa_reg_init(si_pa);
+				sia91xx_dsp_start(si_pa, SNDRV_PCM_STREAM_PLAYBACK);
+				sipa_regmap_check_trimming(si_pa);
+			}
 		}
 	}
 

@@ -265,6 +265,7 @@ bool set_ux_task_to_prefer_cpu(struct task_struct *task, int *orig_target_cpu)
 	bool invalid_target = false;
 	int orig_cls_id = 0;
 	cpumask_t search_cpus = CPU_MASK_NONE;
+	bool ux_cls_boost = false;
 
 	if (unlikely(!global_sched_assist_enabled))
 		return false;
@@ -300,6 +301,7 @@ bool set_ux_task_to_prefer_cpu(struct task_struct *task, int *orig_target_cpu)
 		return false;
 
 	start_cls = cls_nr = get_task_cls_for_scene(task);
+	ux_cls_boost = start_cls > 0 ? true : false;
 	/*
 	 * Avoiding ux core selection can easily lead to small cores for tasks
 	 * that would otherwise be on large cores
@@ -324,7 +326,8 @@ retry:
 		rq = cpu_rq(cpu);
 		orq = (struct oplus_rq *)rq->android_oem_data1;
 
-		if (cls_nr == 0 && !task_fits_max(task, cpu))
+		/* fit status to check if taks util fits cpu capacity */
+		if (cls_nr == 0 && (!task_fits_max(task, cpu) || ux_cls_boost))
 			break;
 
 		/*
@@ -361,8 +364,18 @@ retry:
 	}
 
 	cls_nr = cls_nr + direction;
-	if (cls_nr > 0 && cls_nr < ux_cputopo.cls_nr)
-		goto retry;
+	if (global_lowend_plat_opt) {
+		if (cls_nr >= 0 && cls_nr < ux_cputopo.cls_nr) {
+			goto retry;
+		} else if (cls_nr == ux_cputopo.cls_nr && start_cls != 0) {
+			cls_nr = start_cls - 1;
+			direction = -1;
+			goto retry;
+		}
+	} else {
+		if (cls_nr > 0 && cls_nr < ux_cputopo.cls_nr)
+			goto retry;
+	}
 
 	if (subopt_cpu != -1) {
 		trace_set_ux_task_to_prefer_cpu(task, "subopt",
