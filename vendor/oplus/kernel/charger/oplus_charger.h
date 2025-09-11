@@ -1332,6 +1332,7 @@ struct oplus_chg_chip {
 	int boot_mode;
 	int vooc_project;
 	int limit_current_area_vooc_project;
+	int sw_check_full_cnt;
 	bool suspend_after_full;
 	bool check_batt_full_by_sw;
 	bool external_gauge;
