@@ -200,7 +200,8 @@ enum IM_FLAG_TYPE {
 	IM_FLAG_AUDIO_CAMERA_HAL, /* audio mode disable camera hal ux */
 	IM_FLAG_AFFINITY_THREAD,
 	IM_FLAG_TPD_SET_CPU_AFFINITY = 16,
-	IM_FLAG_COMPRESS_THREAD, /* compress thread skips locking protect */
+	IM_FLAG_COMPRESS_THREAD = 17, /* compress thread skips locking protect */
+	IM_FLAG_RENDER_THREAD = 18,
 	MAX_IM_FLAG_TYPE,
 };
 
