@@ -74,16 +74,8 @@ fi
 log INFO "正在复制内核镜像..."
 cp "$KERNEL_IMAGE" "$ANYKERNEL_DIR/" || log ERROR "复制内核镜像失败。"
 
-log INFO "正在应用 KPM 并修补内核..."
-cd "$ANYKERNEL_DIR" || log ERROR "无法进入 AnyKernel3 目录。"
-
-curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux || log ERROR "下载 KPM 补丁失败。"
-chmod +x patch_linux
-./patch_linux
-rm -f Image patch_linux
-mv oImage Image
-
 log INFO "正在打包内核..."
+cd "$ANYKERNEL_DIR" || log ERROR "无法进入 AnyKernel3 目录。"
 zip -r9 ../"$ZIP_NAME" . || log ERROR "打包内核失败。"
 cd ..
 log INFO "内核打包完成，文件位于：$PACK_DIR/$ZIP_NAME"
