@@ -31,6 +31,12 @@ log() {
     esac
 }
 
+cd andriod13-5.15/common
+
+make ARCH=arm64 CC="ccache clang" O=out gki_defconfig
+
+make ARCH=arm64 O=out CC="ccache clang" -j$(nproc --all)
+
 export PATH="/home/yangqi/kernel/ace5/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin:$PATH"
 export PATH="/home/yangqi/kernel/ace5/kernel_platform/prebuilts/kernel-build-tools/linux-x86/bin:$PATH"
 export CROSS_COMPILE=aarch64-linux-gnu-
@@ -38,6 +44,10 @@ export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 export ARCH=arm64
 export SUBARCH=arm64
 export CC="ccache clang"
+export KBUILD_BUILD_VERSION=1
+export KBUILD_BUILD_USER="build-user"
+export KBUILD_BUILD_HOST="build-host"
+export KBUILD_BUILD_TIMESTAMP="Wed Aug 20 00:00:00 UTC 2024"
 
 log INFO "Clang 版本信息："
 clang --version
