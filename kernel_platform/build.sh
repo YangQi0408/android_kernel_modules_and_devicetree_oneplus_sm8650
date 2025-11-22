@@ -31,12 +31,6 @@ log() {
     esac
 }
 
-cd andriod13-5.15/common
-
-make ARCH=arm64 CC="ccache clang" O=out gki_defconfig
-
-make ARCH=arm64 O=out CC="ccache clang" -j$(nproc --all)
-
 export PATH="/home/yangqi/kernel/ace5/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin:$PATH"
 export PATH="/home/yangqi/kernel/ace5/kernel_platform/prebuilts/kernel-build-tools/linux-x86/bin:$PATH"
 export CROSS_COMPILE=aarch64-linux-gnu-
