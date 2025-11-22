@@ -44,6 +44,7 @@ export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 export ARCH=arm64
 export SUBARCH=arm64
 export CC="ccache clang"
+export CCACHE_DIR="$HOME/.cache/ccache_ace5kernel" 
 export KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_USER="build-user"
 export KBUILD_BUILD_HOST="build-host"
