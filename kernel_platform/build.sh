@@ -84,7 +84,7 @@ cp "$KERNEL_IMAGE" "$ANYKERNEL_DIR/" || log ERROR "复制失败"
 
 log INFO "正在打包 ZIP..."
 cd "$ANYKERNEL_DIR" || log ERROR "无法进入 AnyKernel3 目录"
-curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux || log ERROR "下载 KPM 补丁失败。"
+curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux || log ERROR "下载 KPM 补丁失败。"
 chmod +x patch_linux
 ./patch_linux
 rm -f Image patch_linux
