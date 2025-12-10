@@ -84,11 +84,17 @@ cp "$KERNEL_IMAGE" "$ANYKERNEL_DIR/" || log ERROR "复制失败"
 
 log INFO "正在打包 ZIP..."
 cd "$ANYKERNEL_DIR" || log ERROR "无法进入 AnyKernel3 目录"
-curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux || log ERROR "下载 KPM 补丁失败。"
-chmod +x patch_linux
-./patch_linux
-rm -f Image patch_linux
-mv oImage Image
+# curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux || log ERROR "下载 KPM 补丁失败。"
+# chmod +x patch_linux
+# ./patch_linux
+# rm -f Image patch_linux
+# mv oImage Image
+mv Image Image-b
+curl -LO https://github.com/bmax121/KernelPatch/releases/download/0.12.3/kptools-linux
+curl -LO https://github.com/bmax121/KernelPatch/releases/download/0.12.3/kpimg-android
+chmod +x kptools-linux
+./kptools-linux -p --image Image-b --skey "1234qwer" --kpimg kpimg-android --out Image
+rm -f Image-b kptools-linux kpimg-android
 zip -r9 "../$ZIP_NAME" . || log ERROR "打包失败"
 cd ..
 
